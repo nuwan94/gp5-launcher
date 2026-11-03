@@ -1,0 +1,9 @@
+# Design work stays local (prototypes, 3D sources, reference photos, spec)
+/design/
+/blender/
+/docs/
+/.claude/
+
+# OS clutter
+Thumbs.db
+.DS_Store
