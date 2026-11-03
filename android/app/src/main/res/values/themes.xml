@@ -1,0 +1,10 @@
+<resources>
+    <!-- Dark from the first frame so a cold start never flashes white (DESIGN.md section 8: no white at night) -->
+    <style name="Theme.Gp5" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/gp5_bg</item>
+        <item name="android:statusBarColor">@color/gp5_bg</item>
+        <item name="android:navigationBarColor">@color/gp5_bg</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+    <color name="gp5_bg">#FF121212</color>
+</resources>
