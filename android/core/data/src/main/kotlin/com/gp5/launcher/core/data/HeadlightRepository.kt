@@ -47,6 +47,7 @@ class HeadlightRepository @Inject constructor(
     val state: StateFlow<Headlights> = _state.asStateFlow()
 
     private var manual: Boolean? = null
+    @Volatile private var greetUntil = 0L
     private var lastSignal: Boolean? = null
 
     init {
@@ -56,6 +57,13 @@ class HeadlightRepository @Inject constructor(
                 delay(1_000)
             }
         }
+    }
+
+    /** Welcome: the car's lamps light up for [ms], whatever the real state (a greeting, not a reading). */
+    fun greet(ms: Long = 1_600) {
+        greetUntil = android.os.SystemClock.elapsedRealtime() + ms
+        publish()
+        scope.launch { delay(ms + 20); publish() }
     }
 
     /** Home light button: flips what is shown until the unit's own signal next changes. */
@@ -69,6 +77,7 @@ class HeadlightRepository @Inject constructor(
         val unit = if (p.lightsFromUnit) read(p.lightSignal) else null
         if (unit != lastSignal) { lastSignal = unit; manual = null }   // the unit changed: follow it again
         val m = manual
+        if (android.os.SystemClock.elapsedRealtime() < greetUntil) { _state.value = _state.value.copy(on = true); return }
         _state.value = when {
             m != null -> Headlights(m, fromUnit = false, source = "Manual")
             unit != null -> Headlights(unit, fromUnit = true, source = describe(p.lightSignal))

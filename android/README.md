@@ -77,6 +77,9 @@ Trips record by themselves while the OBD adapter is connected: a trip starts abo
 ## Navigation
 Settings › Navigation: set Home and Work (an address, place name or `lat,lng`) and the maps app. Home then shows one-tap route buttons.
 
+## Welcome
+When the head unit starts (or wakes after the screen was off for a minute, as most units do on ignition), Home plays a short greeting: the gold Honda logo, "Good morning, <name>" and the date, then the car's lamps flash as Home appears. A short chime plays and the greeting is spoken through the head unit's text-to-speech (music from the phone dips under it); a name left as "User" is not spoken. Set the name (default "User"), switch the voice or music off, turn it off, or play it from Settings › Display › Welcome. It is skipped while driving; a tap skips it; calm motion makes it a plain fade.
+
 ## Settings
 Categories on the left (Vehicle & OBD, Display, Units, Navigation, Home & car, Trips & fuel, Data & backup, About), each with a live summary. Units switches economy between km/L and L/100 km everywhere. Data & backup saves the settings, dock and hidden apps as a JSON file (a USB drive works), restores it, or resets the launcher (trips and the fuel log are kept); these are locked while driving.
 

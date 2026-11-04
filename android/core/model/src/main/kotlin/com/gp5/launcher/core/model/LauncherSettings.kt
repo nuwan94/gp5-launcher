@@ -45,9 +45,16 @@ data class LauncherSettings(
     /** "" = system night mode; else "system|global|secure:key=onValue" found by the light finder. */
     val lightSignal: String = "",
     val economyUnit: EconomyUnit = EconomyUnit.KmPerL,
+    /** Welcome greeting when the head unit starts or wakes (ignition on). */
+    val welcome: Boolean = true,
+    val driverName: String = DEFAULT_NAME,
+    /** Speak the greeting (text-to-speech) and play the welcome chime. */
+    val welcomeVoice: Boolean = true,
+    val welcomeMusic: Boolean = true,
 ) {
     companion object {
         const val ACCENT_RS_RED = 0xFFE24B4A
+        const val DEFAULT_NAME = "User"
         val ACCENTS = listOf(
             0xFFE24B4A to "RS red",
             0xFFEF9F27 to "Amber",

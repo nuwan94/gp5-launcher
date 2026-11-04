@@ -65,6 +65,10 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
         val LightsFromUnit = booleanPreferencesKey("lightsFromUnit")
         val LightSignal = stringPreferencesKey("lightSignal")
         val Economy = stringPreferencesKey("economyUnit")
+        val Welcome = booleanPreferencesKey("welcome")
+        val DriverName = stringPreferencesKey("driverName")
+        val WelcomeVoice = booleanPreferencesKey("welcomeVoice")
+        val WelcomeMusic = booleanPreferencesKey("welcomeMusic")
     }
 
     val settings: Flow<LauncherSettings> = store.data.map { p ->
@@ -87,6 +91,10 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
             lightsFromUnit = p[Keys.LightsFromUnit] ?: true,
             lightSignal = p[Keys.LightSignal] ?: "",
             economyUnit = EconomyUnit.entries.firstOrNull { it.name == p[Keys.Economy] } ?: EconomyUnit.KmPerL,
+            welcome = p[Keys.Welcome] ?: true,
+            driverName = p[Keys.DriverName]?.takeIf { it.isNotBlank() } ?: LauncherSettings.DEFAULT_NAME,
+            welcomeVoice = p[Keys.WelcomeVoice] ?: true,
+            welcomeMusic = p[Keys.WelcomeMusic] ?: true,
         )
     }
 
@@ -147,6 +155,18 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
     }
     suspend fun setEconomyUnit(u: EconomyUnit) {
         store.edit { it[Keys.Economy] = u.name }
+    }
+    suspend fun setWelcome(on: Boolean) {
+        store.edit { it[Keys.Welcome] = on }
+    }
+    suspend fun setWelcomeVoice(on: Boolean) {
+        store.edit { it[Keys.WelcomeVoice] = on }
+    }
+    suspend fun setWelcomeMusic(on: Boolean) {
+        store.edit { it[Keys.WelcomeMusic] = on }
+    }
+    suspend fun setDriverName(name: String) {
+        store.edit { it[Keys.DriverName] = name.trim().take(24) }
     }
     suspend fun backup(): JSONObject = PrefsJson.write(store.data.first())
     suspend fun restore(json: JSONObject) {

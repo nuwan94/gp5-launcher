@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -61,6 +62,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 @HiltAndroidApp
@@ -70,6 +72,7 @@ class Gp5App : Application() {
     override fun onCreate() {
         super.onCreate()
         trips.start()   // records trips for the whole life of the process, whichever screen is open
+        com.gp5.launcher.core.data.WelcomeTrigger.install(this)
     }
 }
 
@@ -115,16 +118,40 @@ class MainActivity : ComponentActivity() {
 class LauncherViewModel @Inject constructor(
     settings: SettingsRepository,
     vehicle: VehicleStateRepository,
+    private val headlights: com.gp5.launcher.core.data.HeadlightRepository,
+    private val sound: WelcomeSound,
 ) : ViewModel() {
     val settings = settings.settings.stateIn(viewModelScope, SharingStarted.Eagerly, LauncherSettings())
+    /** False until DataStore has been read (so the welcome never shows the default name by mistake). */
+    val loaded = settings.settings.map { true }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val vehicle = vehicle.state
+    val welcome = com.gp5.launcher.core.data.WelcomeTrigger.pending
+    fun welcomeReveal() = headlights.greet()
+    init { sound.warmUp() }
+    /** Chime and spoken greeting, as set in Settings › Display › Welcome. */
+    fun welcomeStart(greeting: String) {
+        val s = settings.value
+        val who = s.driverName.takeIf { it != LauncherSettings.DEFAULT_NAME }
+        val line = greeting.trimEnd(',', ' ') + (who?.let { ", $it." } ?: ".")
+        sound.play(music = s.welcomeMusic, line = line.takeIf { s.welcomeVoice })
+    }
+    fun welcomeSkip() = sound.fadeOut()
+    fun welcomeDone() = com.gp5.launcher.core.data.WelcomeTrigger.done()
 }
 
 @Composable
 fun LauncherRoot(homePresses: SharedFlow<Unit>, vm: LauncherViewModel = hiltViewModel()) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val car by vm.vehicle.collectAsStateWithLifecycle()
+    val loaded by vm.loaded.collectAsStateWithLifecycle()
+    val welcome by vm.welcome.collectAsStateWithLifecycle()
     var dest by rememberSaveable { mutableStateOf(Destination.Home) }
+    // Welcome on start / wake: back to Home behind it; skipped when off or already driving
+    LaunchedEffect(welcome, loaded) {
+        if (welcome != null && loaded) {
+            if (!settings.welcome || car.isDriving) vm.welcomeDone() else dest = Destination.Home
+        }
+    }
 
     // Pressing Home or Back on the launcher always returns to Home
     BackHandler(enabled = dest != Destination.Home) { dest = Destination.Home }
@@ -137,6 +164,7 @@ fun LauncherRoot(homePresses: SharedFlow<Unit>, vm: LauncherViewModel = hiltView
         economy = settings.economyUnit,
     )
     Gp5Theme(look) {
+      Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize().background(Gp5Palette.Bg)) {
             val rail = @Composable { Rail(selected = dest, onSelect = { dest = it }, side = settings.railSide) }
             if (settings.railSide == RailSide.Left) rail()
@@ -149,6 +177,19 @@ fun LauncherRoot(homePresses: SharedFlow<Unit>, vm: LauncherViewModel = hiltView
             }
             if (settings.railSide == RailSide.Right) rail()
         }
+        if (welcome != null && loaded && settings.welcome) {
+            key(welcome) {
+                WelcomeOverlay(
+                    name = settings.driverName,
+                    calm = settings.calmMotion || com.gp5.launcher.core.design.systemAnimationsOff(),
+                    onStart = vm::welcomeStart,
+                    onSkip = vm::welcomeSkip,
+                    onReveal = vm::welcomeReveal,
+                    onDone = vm::welcomeDone,
+                )
+            }
+        }
+      }
     }
 }
 

@@ -132,6 +132,11 @@ class SettingsViewModel @Inject constructor(
     fun finderReset() = viewModelScope.launch { lights.use(null); _finder.value = Finder.Idle }
 
     fun economy(u: com.gp5.launcher.core.model.EconomyUnit) = viewModelScope.launch { repo.setEconomyUnit(u) }
+    fun welcome(on: Boolean) = viewModelScope.launch { repo.setWelcome(on) }
+    fun driverName(n: String) = viewModelScope.launch { repo.setDriverName(n) }
+    fun welcomeVoice(on: Boolean) = viewModelScope.launch { repo.setWelcomeVoice(on) }
+    fun welcomeMusic(on: Boolean) = viewModelScope.launch { repo.setWelcomeMusic(on) }
+    fun playWelcome() = com.gp5.launcher.core.data.WelcomeTrigger.fire()
 
     private val _message = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     val message: kotlinx.coroutines.flow.StateFlow<String?> = _message
@@ -352,6 +357,24 @@ private fun DisplayPage(vm: SettingsViewModel, s: LauncherSettings) {
         }
         SettingRow("Calm motion", "Stop ambient animation even when parked") {
             Toggle(s.calmMotion) { vm.calm(it) }
+        }
+    }
+    Section("Welcome", "A greeting when the car starts")
+    Group {
+        SettingRow("Welcome on start", "Plays for a few seconds when the head unit starts or wakes (not while driving)") {
+            Toggle(s.welcome) { vm.welcome(it) }
+        }
+        SettingRow("Your name", "Shown as \"Good morning, ${s.driverName}\"") {
+            TextSetting(if (s.driverName == LauncherSettings.DEFAULT_NAME) "" else s.driverName, LauncherSettings.DEFAULT_NAME, { it.take(24) }) { vm.driverName(it) }
+        }
+        SettingRow("Spoken greeting", "Says \"Good morning, <name>\" through the head unit's text-to-speech") {
+            Toggle(s.welcomeVoice) { vm.welcomeVoice(it) }
+        }
+        SettingRow("Welcome music", "A short chime; music from your phone dips under it") {
+            Toggle(s.welcomeMusic) { vm.welcomeMusic(it) }
+        }
+        SettingRow("Preview", "Play the welcome now") {
+            ActionPill("Play", LocalGp5Look.current.accent) { vm.playWelcome() }
         }
     }
     Section("Headlights", "Light up the car's lamps when your headlights are on, without OBD")
