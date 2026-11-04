@@ -31,6 +31,7 @@ dependencies {
     implementation(project(":core:design"))
     implementation(project(":car3d"))
     implementation(project(":obd"))
+    implementation(libs.androidx.activity.compose)
     implementation(project(":media"))
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

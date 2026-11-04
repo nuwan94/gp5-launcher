@@ -72,6 +72,7 @@ import com.gp5.launcher.core.design.LocalGp5Look
 import com.gp5.launcher.core.design.R as DesignR
 import com.gp5.launcher.core.model.DriveMode
 import com.gp5.launcher.trips.Calibration
+import com.gp5.launcher.core.model.EconomyUnit
 import com.gp5.launcher.trips.FillUp
 import com.gp5.launcher.trips.Trip
 import com.gp5.launcher.trips.TripSample
@@ -251,7 +252,7 @@ private fun TripRow(t: Trip, selected: Boolean, cal: Calibration?, onClick: () -
                 Text(km(t.distanceKm), style = Gp5Type.Title.copy(fontSize = 18.sp), color = Gp5Palette.Text)
                 Text(" km", style = Gp5Type.Caption)
             }
-            Text(economyText(t, cal), style = Gp5Type.Caption)
+            Text(economyText(t, cal, look.economy), style = Gp5Type.Caption)
         }
         if (t.kept) Text("★", color = look.accent, fontSize = 12.sp, modifier = Modifier.padding(end = 8.dp))
     }
@@ -260,10 +261,10 @@ private fun TripRow(t: Trip, selected: Boolean, cal: Calibration?, onClick: () -
 /** Calibrated trip economy; "—" while recording or without fuel data. */
 internal fun tripEconomy(t: Trip, cal: Calibration?): Float? = if (t.open) null else t.economy?.let { it * (cal?.factor ?: 1f) }
 
-private fun economyText(t: Trip, cal: Calibration?): String = when {
+private fun economyText(t: Trip, cal: Calibration?, unit: EconomyUnit): String = when {
     t.open -> "—"
     t.fuelL == 0.0 && t.distanceKm > 0 -> "All EV"
-    else -> tripEconomy(t, cal)?.let { "%.1f km/L".format(it) } ?: "— km/L"
+    else -> tripEconomy(t, cal)?.let { "${unit.text(it)} ${unit.label}" } ?: "— ${unit.label}"
 }
 
 @Composable
@@ -287,17 +288,17 @@ private fun TripDetail(t: Trip, all: List<Trip>, cal: Calibration?, fills: List<
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Kpi("Distance", km(t.distanceKm), "km", when { t.avgSpeed < 30 -> "City trip"; t.avgSpeed > 55 -> "Highway"; else -> "Mixed roads" }, modifier = Modifier.weight(1f))
-            val ecoNote = if (eco != null && avgEco != null) delta(eco / avgEco - 1f, "vs your avg", percent = true) else null
+            val ecoNote = if (eco != null && avgEco != null) better(eco / avgEco - 1f) else null
             Kpi(
-                "Economy", eco?.let { "%.1f".format(it) } ?: if (t.fuelL == 0.0) "EV" else "—", if (eco != null) "km/L" else "",
-                ecoNote?.first ?: when { t.open -> "When the trip ends"; t.fuelL == null -> "No fuel data from the car"; cal == null -> "OBD estimate"; else -> "Pump calibrated" },
+                "Economy", eco?.let { look.economy.text(it) } ?: if (t.fuelL == 0.0) "EV" else "—", if (eco != null) look.economy.label else "",
+                ecoNote?.first ?: when { t.open -> "When the trip ends"; t.fuelL == null -> "No fuel data"; cal == null -> "OBD estimate"; else -> "Pump calibrated" },
                 ecoNote?.second ?: Gp5Palette.Text3, Modifier.weight(1f),
             )
             val evNote = if (avgEv != null) delta((t.evShare - avgEv) * 100, "pts vs avg", percent = false) else null
             if (t.hasModes) {
                 Kpi("EV driving", "${(t.evShare * 100).roundToInt()}", "%", evNote?.first ?: "${km(t.evKm)} km on battery", evNote?.second ?: Gp5Palette.Text3, Modifier.weight(1f))
             } else {
-                Kpi("EV driving", "—", "", "GPS only: plug in OBD for modes", modifier = Modifier.weight(1f))
+                Kpi("EV driving", "—", "", "GPS only (no OBD)", modifier = Modifier.weight(1f))
             }
             Kpi("Avg speed", "${t.avgSpeed.roundToInt()}", "km/h", "Max ${t.maxSpeed.roundToInt()} km/h", modifier = Modifier.weight(1f))
         }
@@ -318,6 +319,12 @@ private fun TripDetail(t: Trip, all: List<Trip>, cal: Calibration?, fills: List<
             Foot("Max coolant", t.maxCoolant?.let { "${it.roundToInt()} °C" } ?: "—", Modifier.weight(1f))
         }
     }
+}
+
+/** Economy vs the average, worded so it reads the same in km/L and L/100 km. */
+private fun better(ratio: Float): Pair<String, Color> {
+    val n = (kotlin.math.abs(ratio) * 100).roundToInt()
+    return if (ratio >= 0) "$n% better than avg" to Gp5Palette.Ev else "$n% worse than avg" to Gp5Palette.Warn
 }
 
 private fun delta(v: Float, what: String, percent: Boolean): Pair<String, Color> {

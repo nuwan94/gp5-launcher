@@ -14,6 +14,9 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.gp5.launcher.core.model.CarRenderer
 import com.gp5.launcher.core.model.LauncherSettings
 import com.gp5.launcher.core.model.NavApp
+import com.gp5.launcher.core.model.EconomyUnit
+import kotlinx.coroutines.flow.first
+import org.json.JSONObject
 import com.gp5.launcher.core.model.RailSide
 import dagger.Module
 import dagger.Provides
@@ -61,6 +64,7 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
         val OilInterval = intPreferencesKey("oilIntervalKm")
         val LightsFromUnit = booleanPreferencesKey("lightsFromUnit")
         val LightSignal = stringPreferencesKey("lightSignal")
+        val Economy = stringPreferencesKey("economyUnit")
     }
 
     val settings: Flow<LauncherSettings> = store.data.map { p ->
@@ -82,6 +86,7 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
             oilIntervalKm = p[Keys.OilInterval] ?: 5000,
             lightsFromUnit = p[Keys.LightsFromUnit] ?: true,
             lightSignal = p[Keys.LightSignal] ?: "",
+            economyUnit = EconomyUnit.entries.firstOrNull { it.name == p[Keys.Economy] } ?: EconomyUnit.KmPerL,
         )
     }
 
@@ -139,6 +144,13 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
     }
     suspend fun setLightSignal(signal: String) {
         store.edit { it[Keys.LightSignal] = signal }
+    }
+    suspend fun setEconomyUnit(u: EconomyUnit) {
+        store.edit { it[Keys.Economy] = u.name }
+    }
+    suspend fun backup(): JSONObject = PrefsJson.write(store.data.first())
+    suspend fun restore(json: JSONObject) {
+        store.edit { PrefsJson.read(json, it) }
     }
     suspend fun reset() {
         store.edit { it.clear() }

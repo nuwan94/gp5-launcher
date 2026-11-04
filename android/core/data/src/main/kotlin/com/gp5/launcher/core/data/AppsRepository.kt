@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -53,6 +54,12 @@ class AppsRepository @Inject constructor(@ApplicationContext private val context
     private val user: UserHandle = Process.myUserHandle()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val store = context.appsStore
+
+    /** Dock and hidden apps as JSON, for Settings > Data & backup. */
+    suspend fun backup(): org.json.JSONObject = PrefsJson.write(store.data.first())
+    suspend fun restore(json: org.json.JSONObject) {
+        store.edit { PrefsJson.read(json, it) }
+    }
     private val icons = LruCache<String, Bitmap>(160)
 
     private object Keys {

@@ -160,7 +160,7 @@ fun VehicleScreen(onOpenObdSettings: () -> Unit = {}, vm: VehicleViewModel = hil
                 }
             }
             Row(Modifier.fillMaxWidth().height(156.dp).graphicsLayer { alpha = dim }, horizontalArrangement = Arrangement.spacedBy(g)) {
-                tiles(car).forEachIndexed { i, t -> SensorTile(t, vm.histories[i], tick, i * 50f, Modifier.weight(1f).fillMaxHeight()) }
+                tiles(car, LocalGp5Look.current.economy).forEachIndexed { i, t -> SensorTile(t, vm.histories[i], tick, i * 50f, Modifier.weight(1f).fillMaxHeight()) }
             }
             DiagnosticsBar(
                 car, faults,
@@ -354,7 +354,7 @@ private fun DrawScope.flowLine(a: Offset, b: Offset, color: Color, phase: Float)
 private enum class Tone { Ok, Info, Warn, Alert, None }
 private data class Tile(val label: String, val value: String, val unit: String, val status: String, val tone: Tone)
 
-private fun tiles(c: VehicleState): List<Tile> {
+private fun tiles(c: VehicleState, unit: com.gp5.launcher.core.model.EconomyUnit): List<Tile> {
     fun v(x: Float?, fmt: String = "%.0f") = if (!c.connected || x == null) "—" else fmt.format(x)
     val coolant = c.coolantC.takeIf { c.connected }
     val volts = c.batteryVolts.takeIf { c.connected }
@@ -374,7 +374,7 @@ private fun tiles(c: VehicleState): List<Tile> {
         Tile("12 V battery", v(volts, "%.1f"), "V",
             when { volts == null -> ""; volts < 12.2f -> "Low"; volts > 14.8f -> "High"; volts >= 13.2f -> "Charging"; else -> "OK" },
             when { volts == null -> Tone.None; volts < 12.2f -> Tone.Warn; volts > 14.8f -> Tone.Alert; else -> Tone.Ok }),
-        Tile("Economy", if (ev) "EV" else v(eco, "%.1f"), if (ev) "" else "km/L",
+        Tile("Economy", if (ev) "EV" else eco?.let { unit.text(it) } ?: "—", if (ev) "" else unit.label,
             when { ev -> "Engine off"; eco == null -> when { !c.connected -> ""; c.airflowGs == null -> "No airflow data"; c.speedKmh < 3f -> "Stopped"; else -> "" }; else -> "Now" }, if (ev) Tone.Ok else Tone.Info),
     )
 }

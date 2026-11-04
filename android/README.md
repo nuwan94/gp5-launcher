@@ -77,6 +77,9 @@ Trips record by themselves while the OBD adapter is connected: a trip starts abo
 ## Navigation
 Settings › Navigation: set Home and Work (an address, place name or `lat,lng`) and the maps app. Home then shows one-tap route buttons.
 
+## Settings
+Categories on the left (Vehicle & OBD, Display, Units, Navigation, Home & car, Trips & fuel, Data & backup, About), each with a live summary. Units switches economy between km/L and L/100 km everywhere. Data & backup saves the settings, dock and hidden apps as a JSON file (a USB drive works), restores it, or resets the launcher (trips and the fuel log are kept); these are locked while driving.
+
 ## Licences
 The 3D car (`car3d/src/main/assets/car/`) is a modified version of "2016 Honda Fit DBA-GK3" by Ddiaz Design (Sketchfab), CC BY-NC-SA 4.0: credit, non-commercial, share-alike. Details in `car3d/src/main/assets/car/LICENSE.txt`.
 The Honda emblem is a trademark, used for this personal launcher only. Icons: Tabler (MIT).

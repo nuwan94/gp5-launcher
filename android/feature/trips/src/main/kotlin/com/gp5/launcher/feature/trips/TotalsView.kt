@@ -116,11 +116,12 @@ internal fun TotalsView(vm: TripsViewModel) {
     val ev = evShareOf(inPeriod)
     val price = fills.firstOrNull()?.pricePerL
     val periodName = listOf("last 7 days", "last 5 weeks", "last 12 months")[period]
+    val unit = LocalGp5Look.current.economy
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth().height(112.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             BigKpi("Distance", km(km), "km", periodName, Modifier.weight(1f))
-            BigKpi("Avg economy", eco?.let { "%.1f".format(it) } ?: "—", "km/L", if (litres > 0) "%.1f L used".format(litres) else "No fuel data yet", Modifier.weight(1f))
+            BigKpi("Avg economy", eco?.let { unit.text(it) } ?: "—", unit.label, if (litres > 0) "%.1f L used".format(litres) else "No fuel data yet", Modifier.weight(1f))
             BigKpi("EV driving", ev?.let { "${(it * 100).roundToInt()}" } ?: "—", "%", "${km(inPeriod.sumOf { it.evKm })} km on battery", Modifier.weight(1f))
             BigKpi(
                 "Fuel cost", if (price != null && litres > 0) rupees(litres * price) else "—", "",
@@ -133,16 +134,16 @@ internal fun TotalsView(vm: TripsViewModel) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         SegTabs(listOf("Week", "Month", "Year"), period, width = 80.dp) { period = it }
                         Spacer(Modifier.weight(1f))
-                        SegTabs(listOf("km/L", "EV %", "km"), metric, width = 72.dp) { metric = it }
+                        SegTabs(listOf(unit.label, "EV %", "km"), metric, width = if (unit == com.gp5.launcher.core.model.EconomyUnit.KmPerL) 72.dp else 96.dp) { metric = it }
                     }
                     val values = bars.map { b ->
                         when (metric) {
-                            0 -> economyOf(b.trips, cal)
+                            0 -> economyOf(b.trips, cal)?.let { unit.of(it) }
                             1 -> evShareOf(b.trips)?.times(100f)
                             else -> b.trips.sumOf { it.distanceKm }.toFloat().takeIf { it > 0f }
                         }
                     }
-                    Bars(bars.map { it.label }, values, unit = listOf("km/L", "%", "km")[metric], key = period, modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 12.dp))
+                    Bars(bars.map { it.label }, values, unit = listOf(unit.label, "%", "km")[metric], key = period, modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 12.dp))
                 }
             }
             GpCard(Modifier.width(308.dp).fillMaxHeight(), phaseDeg = 200f) {
@@ -202,14 +203,14 @@ private fun Bars(labels: List<String>, values: List<Float?>, unit: String, key: 
             drawContext.canvas.nativeCanvas.drawText(label, cx, size.height - 4.dp.toPx(), paint)
             val v = values[i]
             if ((current || i == tapped) && v != null) {
-                drawContext.canvas.nativeCanvas.drawText(if (unit == "km/L") "%.1f".format(v) else "${v.roundToInt()}", cx, bottom - h - 6.dp.toPx(), paint)
+                drawContext.canvas.nativeCanvas.drawText(if (unit.contains('/')) "%.1f".format(v) else "${v.roundToInt()}", cx, bottom - h - 6.dp.toPx(), paint)
             }
         }
         if (avg != null) {
             val y = bottom - bottom * (avg / top) * grow.value
             drawLine(Gp5Palette.Text3, Offset(0f, y), Offset(size.width, y), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f)))
             paint.textAlign = android.graphics.Paint.Align.LEFT; paint.color = textColor
-            drawContext.canvas.nativeCanvas.drawText("avg ${if (unit == "km/L") "%.1f".format(avg) else avg.roundToInt().toString()} $unit", 4.dp.toPx(), y - 4.dp.toPx(), paint)
+            drawContext.canvas.nativeCanvas.drawText("avg ${if (unit.contains('/')) "%.1f".format(avg) else avg.roundToInt().toString()} $unit", 4.dp.toPx(), y - 4.dp.toPx(), paint)
         }
         if (present.isEmpty()) {
             paint.textAlign = android.graphics.Paint.Align.CENTER
@@ -225,7 +226,8 @@ private fun Records(trips: List<Trip>, cal: Calibration?, odometer: Double, oilA
     val longest = trips.maxByOrNull { it.distanceKm }
     Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Records · all time", style = Gp5Type.Label)
-        Record(DesignR.drawable.ic_gas, "Best economy", bestEco?.first?.let(::route) ?: "Trips over 5 km", bestEco?.let { "%.1f km/L".format(it.second) } ?: "—")
+        val unit = LocalGp5Look.current.economy
+        Record(DesignR.drawable.ic_gas, "Best economy", bestEco?.first?.let(::route) ?: "Trips over 5 km", bestEco?.let { "${unit.text(it.second)} ${unit.label}" } ?: "—")
         Record(DesignR.drawable.ic_rail_vehicle, "Most EV driving", mostEv?.let(::route) ?: "Trips over 3 km", mostEv?.let { "${(it.evShare * 100).roundToInt()}%" } ?: "—")
         Record(DesignR.drawable.ic_rail_trips, "Longest trip", longest?.let(::route) ?: "No trips yet", longest?.let { "${km(it.distanceKm)} km" } ?: "—")
         Record(DesignR.drawable.ic_info, "Odometer", if (odometer > 0) "Updated by the trip recorder" else "Set it in Settings", if (odometer > 0) "%,.0f".format(Locale.UK, odometer) else "—")

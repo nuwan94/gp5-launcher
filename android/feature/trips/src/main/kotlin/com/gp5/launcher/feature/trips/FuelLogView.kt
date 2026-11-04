@@ -85,13 +85,14 @@ internal fun FuelLogView(vm: TripsViewModel) {
     val last = fills.firstOrNull()
     val kmSince = if (last != null && settings.odometerKm > last.odometerKm) settings.odometerKm - last.odometerKm else null
     val driving = car.isDriving
+    val unit = LocalGp5Look.current.economy
 
     Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             GpCard(Modifier.weight(1f).fillMaxHeight()) {
                 Column(Modifier.fillMaxSize().padding(16.dp)) {
                     Row(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                        listOf("Date" to 1.4f, "Odometer" to 1.1f, "Litres" to 0.9f, "Rs/L" to 0.8f, "Total" to 1f, "km/L" to 0.9f).forEach { (h, w) ->
+                        listOf("Date" to 1.4f, "Odometer" to 1.1f, "Litres" to 0.9f, "Rs/L" to 0.8f, "Total" to 1f, unit.label to 0.9f).forEach { (h, w) ->
                             Text(h, style = Gp5Type.Caption, modifier = Modifier.weight(w), textAlign = if (h == "Date") TextAlign.Start else TextAlign.End)
                         }
                     }
@@ -101,7 +102,7 @@ internal fun FuelLogView(vm: TripsViewModel) {
                         }
                     }
                     LazyColumn(Modifier.fillMaxSize()) {
-                        items(list, key = { it.fill.id }) { r -> FillLine(r) }
+                        items(list, key = { it.fill.id }) { r -> FillLine(r, unit) }
                     }
                 }
             }
@@ -109,13 +110,13 @@ internal fun FuelLogView(vm: TripsViewModel) {
                 Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(when (reals.size) { 0 -> "Real economy"; 1 -> "Real economy · last full fill"; else -> "Real economy · last ${reals.size} full fills" }, style = Gp5Type.Label)
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text(real?.let { "%.1f".format(it) } ?: "—", style = Gp5Type.Hero.copy(fontSize = 44.sp, lineHeight = 46.sp), color = Gp5Palette.Text)
-                        Text(" km/L", style = Gp5Type.Body.copy(color = Gp5Palette.Text2), modifier = Modifier.padding(bottom = 6.dp))
+                        Text(real?.let { unit.text(it) } ?: "—", style = Gp5Type.Hero.copy(fontSize = 44.sp, lineHeight = 46.sp), color = Gp5Palette.Text)
+                        Text(" ${unit.label}", style = Gp5Type.Body.copy(color = Gp5Palette.Text2), modifier = Modifier.padding(bottom = 6.dp))
                     }
                     val price = last?.pricePerL
                     Text(
                         listOfNotNull(
-                            cal?.let { "OBD estimate %.1f km/L".format(it.obdKmL) },
+                            cal?.let { "OBD estimate ${unit.text(it.obdKmL)} ${unit.label}" },
                             if (real != null && price != null) "Rs %.1f per km".format(price / real) else null,
                         ).joinToString(" · ").ifEmpty { "Two full fills give the first real figure" },
                         style = Gp5Type.Caption,
@@ -159,7 +160,7 @@ internal fun FuelLogView(vm: TripsViewModel) {
 }
 
 @Composable
-private fun FillLine(r: FillRow) {
+private fun FillLine(r: FillRow, unit: com.gp5.launcher.core.model.EconomyUnit) {
     val f = r.fill
     Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
         val date = SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(f.timeMs))
@@ -171,7 +172,7 @@ private fun FillLine(r: FillRow) {
         Cell("%.2f".format(f.litres), 0.9f)
         Cell("%.0f".format(f.pricePerL), 0.8f)
         Cell("%,.0f".format(Locale.UK, f.total), 1f)
-        Cell(r.realKmL?.let { "%.1f".format(it) } ?: if (f.full) "—" else "next full", 0.9f, color = if (r.realKmL != null) Gp5Palette.Ev else Gp5Palette.Text3)
+        Cell(r.realKmL?.let { unit.text(it) } ?: if (f.full) "—" else "next full", 0.9f, color = if (r.realKmL != null) Gp5Palette.Ev else Gp5Palette.Text3)
     }
     Box(Modifier.fillMaxWidth().height(1.dp).background(Gp5Palette.Line))
 }

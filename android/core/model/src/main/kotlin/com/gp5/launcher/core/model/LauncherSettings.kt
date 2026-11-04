@@ -5,6 +5,15 @@ enum class RailSide { Left, Right }
 /** Home car stage: live Filament 3D, the Blender turntable, or pick by GPU (Auto). */
 enum class CarRenderer { Auto, Live, Turntable }
 
+/** Fuel economy unit (DESIGN.md Q4). Values are kept in km/L and converted for display. */
+enum class EconomyUnit(val label: String) {
+    KmPerL("km/L"),
+    LPer100Km("L/100 km");
+
+    fun of(kmPerL: Float): Float = if (this == KmPerL) kmPerL else 100f / kmPerL
+    fun text(kmPerL: Float): String = "%.1f".format(of(kmPerL))
+}
+
 /** Which maps app the Home and Work buttons open. Auto: Google Maps, else Waze, else any geo app. */
 enum class NavApp { Auto, GoogleMaps, Waze }
 
@@ -35,6 +44,7 @@ data class LauncherSettings(
     val lightsFromUnit: Boolean = true,
     /** "" = system night mode; else "system|global|secure:key=onValue" found by the light finder. */
     val lightSignal: String = "",
+    val economyUnit: EconomyUnit = EconomyUnit.KmPerL,
 ) {
     companion object {
         const val ACCENT_RS_RED = 0xFFE24B4A

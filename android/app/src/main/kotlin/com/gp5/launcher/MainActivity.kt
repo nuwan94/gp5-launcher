@@ -134,6 +134,7 @@ fun LauncherRoot(homePresses: SharedFlow<Unit>, vm: LauncherViewModel = hiltView
         accent = Color(settings.accentArgb),
         goldTrim = settings.goldTrim,
         ambient = !car.isDriving && !settings.calmMotion,
+        economy = settings.economyUnit,
     )
     Gp5Theme(look) {
         Row(Modifier.fillMaxSize().background(Gp5Palette.Bg)) {

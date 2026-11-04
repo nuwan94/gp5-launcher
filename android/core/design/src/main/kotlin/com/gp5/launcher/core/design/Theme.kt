@@ -23,6 +23,8 @@ data class Gp5Look(
     val goldTrim: Boolean = true,
     /** Ambient animation allowed: parked, calm motion off, system animations on. */
     val ambient: Boolean = true,
+    /** km/L or L/100 km, for every economy figure. */
+    val economy: com.gp5.launcher.core.model.EconomyUnit = com.gp5.launcher.core.model.EconomyUnit.KmPerL,
 ) {
     val accentSoft: Color get() = accent.copy(alpha = 0.14f)
 }
