@@ -10,7 +10,7 @@ android {
     compileSdk = 37
     defaultConfig {
         applicationId = "com.gp5.launcher"
-        minSdk = 29
+        minSdk = 24
         // Head units run Android 10-13 (DESIGN.md section 2). 33 avoids the API 34+ foreground-service
         // type rules and the API 35 forced edge-to-edge until those are handled on purpose.
         targetSdk = 33

@@ -7,7 +7,7 @@ android {
     namespace = "com.gp5.launcher.core.design"
     compileSdk = 37
     defaultConfig {
-        minSdk = 29
+        minSdk = 24
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

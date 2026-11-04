@@ -7,7 +7,7 @@ android {
     namespace = "com.gp5.launcher.feature.trips"
     compileSdk = 37
     defaultConfig {
-        minSdk = 29
+        minSdk = 24
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
