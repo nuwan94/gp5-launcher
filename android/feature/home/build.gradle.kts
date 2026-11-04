@@ -9,7 +9,7 @@ android {
     namespace = "com.gp5.launcher.feature.home"
     compileSdk = 37
     defaultConfig {
-        minSdk = 29
+        minSdk = 24
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -34,6 +34,7 @@ dependencies {
     implementation(libs.hilt.viewmodel.compose)
     implementation(project(":obd"))
     implementation(project(":media"))
+    implementation(project(":core:data"))
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 }

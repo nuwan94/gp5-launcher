@@ -1,13 +1,15 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
 }
 
 android {
     namespace = "com.gp5.launcher.feature.apps"
     compileSdk = 37
     defaultConfig {
-        minSdk = 29
+        minSdk = 24
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -27,4 +29,12 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
     implementation(project(":core:design"))
+    implementation(project(":core:data"))
+    implementation(project(":obd"))
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.hilt.viewmodel.compose)
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
 }

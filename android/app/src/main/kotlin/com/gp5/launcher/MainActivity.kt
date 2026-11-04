@@ -1,6 +1,7 @@
 package com.gp5.launcher
 
 import android.app.Application
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -52,6 +54,8 @@ import com.gp5.launcher.obd.VehicleStateRepository
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.HiltAndroidApp
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
@@ -65,6 +69,14 @@ class Gp5App : Application()
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    /** Fires when the Home button is pressed while the launcher is already running. */
+    private val homePresses = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.hasCategory(Intent.CATEGORY_HOME)) homePresses.tryEmit(Unit)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -72,7 +84,7 @@ class MainActivity : ComponentActivity() {
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
-        setContent { LauncherRoot() }
+        setContent { LauncherRoot(homePresses) }
     }
 }
 
@@ -86,13 +98,14 @@ class LauncherViewModel @Inject constructor(
 }
 
 @Composable
-fun LauncherRoot(vm: LauncherViewModel = hiltViewModel()) {
+fun LauncherRoot(homePresses: SharedFlow<Unit>, vm: LauncherViewModel = hiltViewModel()) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val car by vm.vehicle.collectAsStateWithLifecycle()
     var dest by rememberSaveable { mutableStateOf(Destination.Home) }
 
     // Pressing Home or Back on the launcher always returns to Home
     BackHandler(enabled = dest != Destination.Home) { dest = Destination.Home }
+    LaunchedEffect(homePresses) { homePresses.collect { dest = Destination.Home } }
 
     val look = Gp5Look(
         accent = Color(settings.accentArgb),
@@ -129,7 +142,7 @@ private fun Screens(dest: Destination, go: (Destination) -> Unit) {
                 Destination.Home -> HomeScreen(onOpenApps = { go(Destination.Apps) })
                 Destination.Vehicle -> VehicleScreen()
                 Destination.Trips -> TripsScreen()
-                Destination.Apps -> AppsScreen()
+                Destination.Apps -> AppsScreen(onHome = { go(Destination.Home) })
                 Destination.Settings -> SettingsScreen()
             }
         }

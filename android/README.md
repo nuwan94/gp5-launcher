@@ -1,6 +1,6 @@
 # GP5 Launcher (Android)
 
-Native launcher for the Honda Fit GP5 head unit (1024 × 600, Android 10–13).
+Native launcher for the Honda Fit GP5 head unit (1024 × 600; Android 7 and newer, typically 8.1–13).
 The HTML design prototypes and the design spec are kept outside this repository.
 
 ## Stack
@@ -9,7 +9,7 @@ Planned: Room (trips, M5), Filament/SceneView (3D car, M4), MapLibre (optional m
 
 | | |
 |---|---|
-| `minSdk` | 29 (Android 10) |
+| `minSdk` | 24 (Android 7): many head units sold as "Android 10" really run 8.1 or 9 |
 | `targetSdk` | 33: head units run 10–13; avoids the API 34+ foreground-service-type rules and API 35 forced edge-to-edge until handled on purpose |
 | `compileSdk` | 37: required by current AndroidX (Compose 1.12, Hilt 1.4) |
 
@@ -18,14 +18,14 @@ Planned: Room (trips, M5), Filament/SceneView (3D car, M4), MapLibre (optional m
 :app                 HOME activity (MainActivity), Hilt app, LauncherRoot: rail + status bar + screens
 :core:design         tokens (tokens.css), theme, gold trim (gold.css), Rail, StatusBar, GpCard, ModePill, Chip
 :core:model          VehicleState, DriveMode, MediaState, LauncherSettings
-:core:data           SettingsRepository (DataStore "gp5.settings")
+:core:data           SettingsRepository (DataStore "gp5.settings"), AppsRepository (LauncherApps + "gp5.apps")
 :obd                 VehicleStateRepository; SimulatedVehicleRepository until the ELM327 transport (M2)
 :media               MediaRepository; stub until MediaSession + NotificationListener (M3)
 :feature:home        Layout B frame with live speed / mode / battery and now playing
 :feature:settings    Display > Look: accent, rail side, gold trim, calm motion (live on every screen)
 :feature:vehicle     placeholder (M2)
 :feature:trips       placeholder (M5)
-:feature:apps        placeholder (M3)
+:feature:apps        drawer: installed apps, search, categories, 6 x 3 pages, dock / hide / app info
 ```
 
 ## Build

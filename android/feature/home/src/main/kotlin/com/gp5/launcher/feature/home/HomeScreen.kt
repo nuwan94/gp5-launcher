@@ -27,7 +27,13 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gp5.launcher.core.data.AppsRepository
+import com.gp5.launcher.core.design.DockGlyph
+import com.gp5.launcher.core.design.DockSlot
+import com.gp5.launcher.core.design.EmptyDockSlot
 import com.gp5.launcher.core.design.GpCard
+import com.gp5.launcher.core.design.IconLoader
+import com.gp5.launcher.core.design.R as DesignR
 import com.gp5.launcher.core.design.Gp5Dimens
 import com.gp5.launcher.core.design.Gp5Motion
 import com.gp5.launcher.core.design.Gp5Palette
@@ -44,9 +50,13 @@ import kotlin.math.roundToInt
 class HomeViewModel @Inject constructor(
     private val vehicle: VehicleStateRepository,
     private val media: MediaRepository,
+    private val apps: AppsRepository,
 ) : ViewModel() {
     val state = vehicle.state
     val nowPlaying = media.state
+    val appsState = apps.state
+    val icons: IconLoader = { pkg, px -> apps.icon(pkg, px) }
+    fun launch(pkg: String, bounds: android.graphics.Rect?) = apps.launch(pkg, bounds)
     fun toggleDemoDrive(on: Boolean) = vehicle.setSimulatedDriving(on)
     fun playPause() = media.playPause()
 }
@@ -60,6 +70,7 @@ class HomeViewModel @Inject constructor(
 fun HomeScreen(onOpenApps: () -> Unit, vm: HomeViewModel = hiltViewModel()) {
     val car by vm.state.collectAsStateWithLifecycle()
     val media by vm.nowPlaying.collectAsStateWithLifecycle()
+    val apps by vm.appsState.collectAsStateWithLifecycle()
     val g = Gp5Dimens.Gutter
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(g)) {
         Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(g)) {
@@ -88,14 +99,15 @@ fun HomeScreen(onOpenApps: () -> Unit, vm: HomeViewModel = hiltViewModel()) {
             SmartCard("Weather", "Rain from 3 pm", 300f, Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth().height(Gp5Dimens.Dock), horizontalArrangement = Arrangement.spacedBy(g)) {
-            listOf("Maps", "Waze", "Spotify", "YT Music", "Radio", "Phone").forEachIndexed { i, label ->
-                GpCard(Modifier.weight(1f).fillMaxHeight(), phaseDeg = i * 60f) {
-                    Text(label, style = Gp5Type.Caption, modifier = Modifier.align(Alignment.Center))
+            // The user's dock (shared with the Apps drawer); empty slots open the drawer
+            apps.dock.forEachIndexed { i, app ->
+                if (app != null) {
+                    DockSlot(app.packageName, app.label, vm.icons, onClick = { b -> vm.launch(app.packageName, b) }, phaseDeg = i * 60f, modifier = Modifier.weight(1f))
+                } else {
+                    EmptyDockSlot(onClick = onOpenApps, modifier = Modifier.weight(1f))
                 }
             }
-            GpCard(Modifier.weight(1f).fillMaxHeight().clickable(onClick = onOpenApps), phaseDeg = 30f) {
-                Text("All apps", style = Gp5Type.Caption, modifier = Modifier.align(Alignment.Center))
-            }
+            DockGlyph(DesignR.drawable.ic_rail_apps, "All apps", onClick = onOpenApps, phaseDeg = 30f, modifier = Modifier.weight(1f))
         }
     }
 }
