@@ -17,5 +17,5 @@ rootProject.name = "gp5-launcher"
 
 include(":app")
 include(":core:design", ":core:model", ":core:data")
-include(":obd", ":media")
+include(":obd", ":media", ":car3d")
 include(":feature:home", ":feature:vehicle", ":feature:trips", ":feature:apps", ":feature:settings")

@@ -1,0 +1,13 @@
+fit-gp5.glb, studio.hdr and turntable/ are made from a modified version of "2016 Honda Fit DBA-GK3"
+(https://sketchfab.com/3d-models/2016-honda-fit-dba-gk3-17cc85164ad143e5bb0f3cd0a88079d2)
+by Ddiaz Design (https://sketchfab.com/ddiaz-design),
+licensed under CC-BY-NC-SA-4.0 (http://creativecommons.org/licenses/by-nc-sa/4.0/).
+
+Changes: GP5 hybrid front (round fog lamps replacing the blanking grilles, continuous LED bars),
+red rear bumper reflectors, silver 10-spoke alloy wheels, black clear-coat paint, gold emblems,
+HYBRID badge, lamps split front / rear, wheel pivots, meshes merged per
+material, baked floor shadow; studio lighting, environment map and turntable rendered in Blender Cycles.
+
+This modified model and its renders are shared under the same licence: credit required, no commercial use.
+The Honda name and "H" emblem are trademarks of Honda Motor Co., Ltd.; this personal launcher is not
+affiliated with or endorsed by Honda.

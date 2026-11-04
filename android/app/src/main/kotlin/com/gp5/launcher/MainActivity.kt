@@ -117,7 +117,7 @@ fun LauncherRoot(homePresses: SharedFlow<Unit>, vm: LauncherViewModel = hiltView
             val rail = @Composable { Rail(selected = dest, onSelect = { dest = it }, side = settings.railSide) }
             if (settings.railSide == RailSide.Left) rail()
             Column(Modifier.weight(1f).padding(start = Gp5Dimens.Gutter, end = Gp5Dimens.Gutter, bottom = Gp5Dimens.Gutter)) {
-                StatusBar(obdConnected = car.connected, outsideTempC = 24)
+                StatusBar(obdConnected = car.connected, outsideTempC = car.ambientC?.let { kotlin.math.round(it).toInt() })
                 Screens(dest) { dest = it }
             }
             if (settings.railSide == RailSide.Right) rail()
@@ -140,7 +140,7 @@ private fun Screens(dest: Destination, go: (Destination) -> Unit) {
         Box(Modifier.fillMaxSize()) {
             when (d) {
                 Destination.Home -> HomeScreen(onOpenApps = { go(Destination.Apps) })
-                Destination.Vehicle -> VehicleScreen()
+                Destination.Vehicle -> VehicleScreen(onOpenObdSettings = { go(Destination.Settings) })
                 Destination.Trips -> TripsScreen()
                 Destination.Apps -> AppsScreen(onHome = { go(Destination.Home) })
                 Destination.Settings -> SettingsScreen()

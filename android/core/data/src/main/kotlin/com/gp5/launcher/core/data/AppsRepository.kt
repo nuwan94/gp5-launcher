@@ -193,9 +193,9 @@ class AppsRepository @Inject constructor(@ApplicationContext private val context
             listOf("com.syu.radio", "com.microntek.radio", "com.android.fmradio", "com.caf.fmradio"),
             listOf("com.syu.bt", "com.microntek.bluetooth", "com.google.android.dialer", "com.android.dialer"),
         )
-        val MEDIA_CATEGORIES = setOf(ApplicationInfo.CATEGORY_AUDIO, ApplicationInfo.CATEGORY_VIDEO, ApplicationInfo.CATEGORY_IMAGE)
+        val MEDIA_CATEGORIES = setOf(ApplicationInfo.CATEGORY_AUDIO, ApplicationInfo.CATEGORY_VIDEO)   // not IMAGE: Photos is not a player
         val NAV_WORDS = listOf("maps", "waze", "navi", "gps", "sygic", "osmand", "here wego")
-        val MEDIA_WORDS = listOf("music", "radio", "player", "video", "spotify", "youtube", "podcast", "audio", "deezer", "tidal", "netflix", "gallery")
+        val MEDIA_WORDS = listOf("music", "radio", "player", "video", "spotify", "youtube", "podcast", "audio", "deezer", "tidal", "netflix")
         val CAR_WORDS = listOf("obd", "torque", "dvr", "dashcam", "tpms", "canbus", "bluetooth", "dialer", "phone", "honda", "vehicle", "car ", ".car", "carplay", "android auto")
     }
 }

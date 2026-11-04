@@ -39,7 +39,7 @@ fun StatusBar(obdConnected: Boolean, outsideTempC: Int?, modifier: Modifier = Mo
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Gp5Dimens.S4)) {
             if (outsideTempC != null) Text("$outsideTempC°", style = Gp5Type.Label.copy(color = Gp5Palette.Text), fontSize = 14.sp)
-            Chip("OBD", on = obdConnected)
+            if (obdConnected) Chip("OBD", on = true)
         }
     }
 }

@@ -26,6 +26,8 @@ android {
     }
     buildTypes {
         release {
+            // head units are ARM; the emulator ABIs (x86, x86_64) only ship in debug builds
+            ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

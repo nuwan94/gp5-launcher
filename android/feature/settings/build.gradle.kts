@@ -29,6 +29,8 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
     implementation(project(":core:design"))
+    implementation(project(":car3d"))
+    implementation(project(":obd"))
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.hilt.viewmodel.compose)
