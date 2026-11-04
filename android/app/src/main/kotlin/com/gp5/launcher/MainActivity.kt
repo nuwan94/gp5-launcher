@@ -51,6 +51,9 @@ import com.gp5.launcher.feature.settings.SettingsScreen
 import com.gp5.launcher.feature.trips.TripsScreen
 import com.gp5.launcher.feature.vehicle.VehicleScreen
 import com.gp5.launcher.obd.VehicleStateRepository
+import com.gp5.launcher.obd.GpsSpeed
+import androidx.activity.result.contract.ActivityResultContracts
+import com.gp5.launcher.trips.TripRecorder
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.HiltAndroidApp
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -61,7 +64,14 @@ import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 @HiltAndroidApp
-class Gp5App : Application()
+class Gp5App : Application() {
+    @Inject lateinit var trips: TripRecorder
+
+    override fun onCreate() {
+        super.onCreate()
+        trips.start()   // records trips for the whole life of the process, whichever screen is open
+    }
+}
 
 /**
  * The HOME activity. Registered as the launcher (HOME + DEFAULT), single task, landscape.
@@ -71,6 +81,16 @@ class Gp5App : Application()
 class MainActivity : ComponentActivity() {
     /** Fires when the Home button is pressed while the launcher is already running. */
     private val homePresses = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    @Inject lateinit var gps: GpsSpeed
+
+    /** Location powers the GPS speedometer (no OBD needed) and trip place names. Asked once. */
+    private val askLocation = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { gps.start() }
+
+    override fun onResume() {
+        super.onResume()
+        gps.start()   // picks up a permission granted in system settings
+    }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -85,6 +105,9 @@ class MainActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         setContent { LauncherRoot(homePresses) }
+        if (!gps.allowed() && savedInstanceState == null) {
+            askLocation.launch(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
     }
 }
 
@@ -117,7 +140,10 @@ fun LauncherRoot(homePresses: SharedFlow<Unit>, vm: LauncherViewModel = hiltView
             val rail = @Composable { Rail(selected = dest, onSelect = { dest = it }, side = settings.railSide) }
             if (settings.railSide == RailSide.Left) rail()
             Column(Modifier.weight(1f).padding(start = Gp5Dimens.Gutter, end = Gp5Dimens.Gutter, bottom = Gp5Dimens.Gutter)) {
-                StatusBar(obdConnected = car.connected, outsideTempC = car.ambientC?.let { kotlin.math.round(it).toInt() })
+                StatusBar(
+                    obdConnected = car.connected, outsideTempC = car.ambientC?.let { kotlin.math.round(it).toInt() },
+                    gpsSpeed = car.speedSource == com.gp5.launcher.core.model.SpeedSource.Gps,
+                )
                 Screens(dest) { dest = it }
             }
             if (settings.railSide == RailSide.Right) rail()
@@ -139,7 +165,7 @@ private fun Screens(dest: Destination, go: (Destination) -> Unit) {
     ) { d ->
         Box(Modifier.fillMaxSize()) {
             when (d) {
-                Destination.Home -> HomeScreen(onOpenApps = { go(Destination.Apps) })
+                Destination.Home -> HomeScreen(onOpenApps = { go(Destination.Apps) }, onOpenSettings = { go(Destination.Settings) })
                 Destination.Vehicle -> VehicleScreen(onOpenObdSettings = { go(Destination.Settings) })
                 Destination.Trips -> TripsScreen()
                 Destination.Apps -> AppsScreen(onHome = { go(Destination.Home) })

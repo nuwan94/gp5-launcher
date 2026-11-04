@@ -67,9 +67,16 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.gp5.launcher.core.model.NavApp
+import com.gp5.launcher.core.data.HeadlightRepository
+import com.gp5.launcher.core.data.LightCandidate
 
 @HiltViewModel
-class SettingsViewModel @Inject constructor(private val repo: SettingsRepository, vehicle: VehicleStateRepository) : ViewModel() {
+class SettingsViewModel @Inject constructor(
+    private val repo: SettingsRepository,
+    vehicle: VehicleStateRepository,
+    private val lights: HeadlightRepository,
+) : ViewModel() {
     val vehicle = vehicle.state
     fun obdEnabled(on: Boolean) = viewModelScope.launch { repo.setObdEnabled(on) }
     fun obdAddress(a: String) = viewModelScope.launch { repo.setObdAddress(a) }
@@ -80,6 +87,38 @@ class SettingsViewModel @Inject constructor(private val repo: SettingsRepository
     fun calm(on: Boolean) = viewModelScope.launch { repo.setCalmMotion(on) }
     fun carRenderer(r: CarRenderer) = viewModelScope.launch { repo.setCarRenderer(r) }
     val activeRenderer = LiveHealth.active
+    fun navApp(a: NavApp) = viewModelScope.launch { repo.setNavApp(a) }
+    fun homePlace(p: String) = viewModelScope.launch { repo.setHomePlace(p) }
+    fun workPlace(p: String) = viewModelScope.launch { repo.setWorkPlace(p) }
+    fun odometer(km: Double) = viewModelScope.launch { repo.setOdometer(km) }
+    fun tripEnd(min: Int) = viewModelScope.launch { repo.setTripEndMinutes(min) }
+    fun keepTrips(days: Int) = viewModelScope.launch { repo.setKeepTripsDays(days) }
+    fun oilChangedAt(km: Double) = viewModelScope.launch { repo.setOilChangedAt(km) }
+    fun oilInterval(km: Int) = viewModelScope.launch { repo.setOilInterval(km) }
+
+    val headlights = lights.state
+    fun lightsFromUnit(on: Boolean) = viewModelScope.launch { repo.setLightsFromUnit(on) }
+    fun lightSource(signal: String) = lights.describe(signal)
+
+    /** Light finder: Idle -> Off snapshot taken -> result. */
+    sealed interface Finder {
+        data object Idle : Finder
+        data object Busy : Finder
+        data class WaitingForOn(val off: Map<String, String?>) : Finder
+        data class Found(val candidate: LightCandidate) : Finder
+        data object Nothing : Finder
+    }
+    private val _finder = kotlinx.coroutines.flow.MutableStateFlow<Finder>(Finder.Idle)
+    val finder: kotlinx.coroutines.flow.StateFlow<Finder> = _finder
+
+    fun finderStart() = viewModelScope.launch { _finder.value = Finder.Busy; _finder.value = Finder.WaitingForOn(lights.snapshot()) }
+    fun finderDone() = viewModelScope.launch {
+        val off = (_finder.value as? Finder.WaitingForOn)?.off ?: return@launch
+        _finder.value = Finder.Busy
+        val best = lights.diff(off, lights.snapshot()).firstOrNull()
+        if (best == null) _finder.value = Finder.Nothing else { lights.use(best); _finder.value = Finder.Found(best) }
+    }
+    fun finderReset() = viewModelScope.launch { lights.use(null); _finder.value = Finder.Idle }
 }
 
 /**
@@ -103,7 +142,7 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
                 if (car.connected) {
                     SettingRow("Live data", liveLine(car)) {}
                 }
-                SettingRow("Use OBD adapter", "Speed, mode and engine data on Home and Vehicle") {
+                SettingRow("Use OBD adapter", "Drive mode and engine data. Off or unplugged: speed comes from GPS") {
                     Toggle(s.obdEnabled) { vm.obdEnabled(it) }
                 }
                 SettingRow("Adapter address", "Most Wi-Fi adapters use 192.168.0.10:35000") {
@@ -149,6 +188,94 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
             Group {
                 SettingRow("3D view", if (active.isEmpty()) "Auto picks live 3D when the unit has OpenGL ES 3" else "Showing: $active") {
                     Segmented(listOf("Auto", "Live 3D", "Turntable"), s.carRenderer.ordinal) { vm.carRenderer(CarRenderer.entries[it]) }
+                }
+            }
+            Text("Headlights", style = Gp5Type.Title, color = Gp5Palette.Text, modifier = Modifier.padding(top = 24.dp))
+            Text("Light up the car's lamps when your headlights are on, without OBD", style = Gp5Type.Label, modifier = Modifier.padding(top = 2.dp, bottom = 16.dp))
+            val lightsNow by vm.headlights.collectAsStateWithLifecycle()
+            val finder by vm.finder.collectAsStateWithLifecycle()
+            Group {
+                SettingRow("Follow the head unit", "Uses the illumination (ILL) wire through night mode, or the setting found below") {
+                    Toggle(s.lightsFromUnit) { vm.lightsFromUnit(it) }
+                }
+                SettingRow(
+                    "Now: " + if (lightsNow.on) "lights on" else "lights off",
+                    if (lightsNow.fromUnit) "From: ${lightsNow.source}" else if (s.lightsFromUnit) "Manual (tap the light button on Home)" else "Manual",
+                ) {
+                    Box(Modifier.size(12.dp).clip(CircleShape).background(if (lightsNow.on) LocalGp5Look.current.accent else Gp5Palette.Text3))
+                }
+                val f = finder
+                SettingRow(
+                    "Find the light signal",
+                    when (f) {
+                        SettingsViewModel.Finder.Idle -> "Signal: ${vm.lightSource(s.lightSignal)}. With the headlights OFF, tap Start"
+                        SettingsViewModel.Finder.Busy -> "Reading the head unit settings…"
+                        is SettingsViewModel.Finder.WaitingForOn -> "Now switch the headlights ON, wait 2 s, then tap Done"
+                        is SettingsViewModel.Finder.Found -> "Using ${f.candidate.label}"
+                        SettingsViewModel.Finder.Nothing -> "Nothing changed. This unit may not share the light signal; use the Home button"
+                    },
+                ) {
+                    val accent = LocalGp5Look.current.accent
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (s.lightSignal.isNotBlank() || f is SettingsViewModel.Finder.Found) {
+                            ActionPill("Reset", Gp5Palette.Text2) { vm.finderReset() }
+                        }
+                        when (f) {
+                            is SettingsViewModel.Finder.WaitingForOn -> ActionPill("Done", accent) { vm.finderDone() }
+                            SettingsViewModel.Finder.Busy -> {}
+                            else -> ActionPill("Start", accent) { vm.finderStart() }
+                        }
+                    }
+                }
+            }
+            Text("Navigation", style = Gp5Type.Title, color = Gp5Palette.Text, modifier = Modifier.padding(top = 24.dp))
+            Text("One-tap Home and Work routes on the Home screen", style = Gp5Type.Label, modifier = Modifier.padding(top = 2.dp, bottom = 16.dp))
+            Group {
+                SettingRow("Maps app", "Auto uses Google Maps, then Waze") {
+                    Segmented(listOf("Auto", "Maps", "Waze"), s.navApp.ordinal) { vm.navApp(NavApp.entries[it]) }
+                }
+                SettingRow("Home", "An address, place name or lat,lng") {
+                    TextSetting(s.homePlace, "e.g. Maharagama", { it.take(120) }) { vm.homePlace(it) }
+                }
+                SettingRow("Work", "Blank hides the button") {
+                    TextSetting(s.workPlace, "e.g. Colombo 03", { it.take(120) }) { vm.workPlace(it) }
+                }
+            }
+            Text("Trips & fuel", style = Gp5Type.Title, color = Gp5Palette.Text, modifier = Modifier.padding(top = 24.dp))
+            Text("Trips record by themselves while the OBD adapter is connected", style = Gp5Type.Label, modifier = Modifier.padding(top = 2.dp, bottom = 16.dp))
+            Group {
+                SettingRow("Odometer", if (s.odometerKm > 0) "Each trip adds its distance" else "Type the km shown on the dashboard") {
+                    TextSetting(
+                        if (s.odometerKm > 0) "%.0f".format(s.odometerKm) else "", "km",
+                        { it.filter(Char::isDigit).take(7) },
+                    ) { vm.odometer(it.toDoubleOrNull() ?: 0.0) }
+                }
+                SettingRow("End a trip after", "Time stopped with the car still on") {
+                    val options = listOf(5, 10, 20)
+                    Segmented(options.map { "$it min" }, options.indexOf(s.tripEndMinutes).coerceAtLeast(0)) { vm.tripEnd(options[it]) }
+                }
+                SettingRow("Keep trips", "Starred trips are always kept") {
+                    val options = listOf(30, 90, 365, 0)
+                    Segmented(listOf("30 d", "90 d", "1 yr", "Always"), options.indexOf(s.keepTripsDays).coerceAtLeast(0)) { vm.keepTrips(options[it]) }
+                }
+                SettingRow("Oil change every", "Shown in Trips > Totals") {
+                    val options = listOf(5000, 7500, 10000)
+                    Segmented(listOf("5,000", "7,500", "10,000"), options.indexOf(s.oilIntervalKm).coerceAtLeast(0)) { vm.oilInterval(options[it]) }
+                }
+                SettingRow(
+                    "Oil changed",
+                    when {
+                        s.odometerKm <= 0 -> "Set the odometer first"
+                        s.oilChangedAtKm <= 0 -> "Not recorded yet"
+                        else -> "At %,.0f km · next at %,.0f km".format(s.oilChangedAtKm, s.oilChangedAtKm + s.oilIntervalKm)
+                    },
+                ) {
+                    Box(
+                        Modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).background(Gp5Palette.Surface1)
+                            .clickable(enabled = s.odometerKm > 0) { vm.oilChangedAt(s.odometerKm) }
+                            .padding(horizontal = 18.dp),
+                        contentAlignment = Alignment.Center,
+                    ) { Text("Changed today", style = Gp5Type.Label.copy(color = if (s.odometerKm > 0) LocalGp5Look.current.accent else Gp5Palette.Text3)) }
                 }
             }
         }
@@ -252,4 +379,12 @@ private fun Segmented(options: List<String>, selected: Int, onSelect: (Int) -> U
             }
         }
     }
+}
+
+@Composable
+private fun ActionPill(text: String, color: Color, onClick: () -> Unit) {
+    Box(
+        Modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).background(Gp5Palette.Surface1).clickable(onClick = onClick).padding(horizontal = 18.dp),
+        contentAlignment = Alignment.Center,
+    ) { Text(text, style = Gp5Type.Label.copy(color = color)) }
 }

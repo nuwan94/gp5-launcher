@@ -8,6 +8,12 @@ import android.util.Log
 import com.gp5.launcher.core.data.SettingsRepository
 import com.gp5.launcher.core.model.DriveMode
 import com.gp5.launcher.core.model.ObdLink
+import com.gp5.launcher.core.model.SpeedSource
+import android.os.SystemClock
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.stateIn
 import com.gp5.launcher.core.model.VehicleState
 import dagger.Binds
 import dagger.Module
@@ -137,7 +143,8 @@ class Elm327WifiRepository @Inject constructor(
 
     private suspend fun poll(elm: Elm327, detail: String, supported: Set<Int>) {
         fun has(p: Int) = supported.isEmpty() || p in supported
-        val slow = listOf(PID_COOLANT, PID_VOLTS, PID_FUEL, PID_AMBIENT, PID_HYBRID_SOC, PID_INTAKE, PID_THROTTLE, PID_MAF).filter(::has)
+        val slow = listOf(PID_COOLANT, PID_VOLTS, PID_FUEL, PID_AMBIENT, PID_HYBRID_SOC, PID_INTAKE, PID_THROTTLE, PID_MAF, PID_MAP).filter(::has)
+            .let { if (PID_MAF in supported) it - PID_MAP else it }   // MAP is only needed without a MAF sensor
         // engine load joins speed and rpm every cycle: it separates Engine from Assist
         var s = VehicleState(link = ObdLink.Connected, linkDetail = detail)
         var slowIndex = 0
@@ -166,6 +173,7 @@ class Elm327WifiRepository @Inject constructor(
                     PID_HYBRID_SOC -> s.copy(socPercent = b?.let { it[0] * 100f / 255f })
                     PID_INTAKE -> s.copy(intakeC = b?.let { it[0] - 40f })
                     PID_THROTTLE -> s.copy(throttlePercent = b?.let { it[0] * 100f / 255f })
+                    PID_MAP -> s.copy(mapKpa = b?.let { it[0].toFloat() })
                     PID_MAF -> s.copy(mafGs = b?.takeIf { it.size >= 2 }?.let { (it[0] * 256 + it[1]) / 100f })
                     else -> s
                 }
@@ -217,6 +225,7 @@ class Elm327WifiRepository @Inject constructor(
         private const val PID_LOAD = 0x04
         private const val PID_COOLANT = 0x05
         private const val PID_MAF = 0x10
+        private const val PID_MAP = 0x0B
         private const val PID_THROTTLE = 0x11
         private const val PID_RPM = 0x0C
         private const val PID_SPEED = 0x0D
@@ -228,9 +237,40 @@ class Elm327WifiRepository @Inject constructor(
     }
 }
 
+/**
+ * What the app sees: OBD data when the adapter is connected, otherwise the GPS speed (so the
+ * speedometer, ambient-motion lock and trip recording work with the adapter unplugged).
+ */
+@Singleton
+class CombinedVehicleRepository @Inject constructor(
+    private val obd: Elm327WifiRepository,
+    private val gps: GpsSpeed,
+) : VehicleStateRepository {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    override val state: StateFlow<VehicleState> = combine(obd.state, gps.fix, ticker()) { o, fix, now ->
+        val fresh = fix?.takeIf { now - it.atElapsed < GPS_STALE_MS }
+        when {
+            o.connected -> o.copy(speedSource = SpeedSource.Obd)
+            fresh != null -> o.copy(speedKmh = fresh.speedKmh, speedSource = SpeedSource.Gps)
+            else -> o.copy(speedKmh = 0f, speedSource = SpeedSource.None)
+        }
+    }.stateIn(scope, SharingStarted.Eagerly, VehicleState())
+
+    init { gps.start() }
+
+    override suspend fun readFaults(): FaultScan = obd.readFaults()
+    override suspend fun clearFaults(): FaultScan = obd.clearFaults()
+
+    /** Ticks once a second so a GPS fix that stops arriving goes stale. */
+    private fun ticker() = flow { while (true) { emit(SystemClock.elapsedRealtime()); delay(1_000) } }
+
+    companion object { private const val GPS_STALE_MS = 4_000L }
+}
+
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class ObdModule {
     @Binds
-    abstract fun vehicleState(impl: Elm327WifiRepository): VehicleStateRepository
+    abstract fun vehicleState(impl: CombinedVehicleRepository): VehicleStateRepository
 }

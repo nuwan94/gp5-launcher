@@ -5,12 +5,15 @@ import androidx.datastore.core.DataMigration
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.gp5.launcher.core.model.CarRenderer
 import com.gp5.launcher.core.model.LauncherSettings
+import com.gp5.launcher.core.model.NavApp
 import com.gp5.launcher.core.model.RailSide
 import dagger.Module
 import dagger.Provides
@@ -48,6 +51,16 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
         val CarRenderer = stringPreferencesKey("carRenderer")
         val ObdEnabled = booleanPreferencesKey("obdEnabled")
         val ObdAddress = stringPreferencesKey("obdAddress")
+        val NavApp = stringPreferencesKey("navApp")
+        val HomePlace = stringPreferencesKey("homePlace")
+        val WorkPlace = stringPreferencesKey("workPlace")
+        val Odometer = doublePreferencesKey("odometerKm")
+        val TripEnd = intPreferencesKey("tripEndMinutes")
+        val KeepTrips = intPreferencesKey("keepTripsDays")
+        val OilAt = doublePreferencesKey("oilChangedAtKm")
+        val OilInterval = intPreferencesKey("oilIntervalKm")
+        val LightsFromUnit = booleanPreferencesKey("lightsFromUnit")
+        val LightSignal = stringPreferencesKey("lightSignal")
     }
 
     val settings: Flow<LauncherSettings> = store.data.map { p ->
@@ -59,6 +72,16 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
             carRenderer = CarRenderer.entries.firstOrNull { it.name == p[Keys.CarRenderer] } ?: CarRenderer.Auto,
             obdEnabled = p[Keys.ObdEnabled] ?: true,
             obdAddress = p[Keys.ObdAddress] ?: "192.168.0.10:35000",
+            navApp = NavApp.entries.firstOrNull { it.name == p[Keys.NavApp] } ?: NavApp.Auto,
+            homePlace = p[Keys.HomePlace] ?: "",
+            workPlace = p[Keys.WorkPlace] ?: "",
+            odometerKm = p[Keys.Odometer] ?: 0.0,
+            tripEndMinutes = p[Keys.TripEnd] ?: 10,
+            keepTripsDays = p[Keys.KeepTrips] ?: 90,
+            oilChangedAtKm = p[Keys.OilAt] ?: 0.0,
+            oilIntervalKm = p[Keys.OilInterval] ?: 5000,
+            lightsFromUnit = p[Keys.LightsFromUnit] ?: true,
+            lightSignal = p[Keys.LightSignal] ?: "",
         )
     }
 
@@ -82,6 +105,40 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
     }
     suspend fun setObdAddress(address: String) {
         store.edit { it[Keys.ObdAddress] = address.trim() }
+    }
+    suspend fun setNavApp(app: NavApp) {
+        store.edit { it[Keys.NavApp] = app.name }
+    }
+    suspend fun setHomePlace(place: String) {
+        store.edit { it[Keys.HomePlace] = place.trim() }
+    }
+    suspend fun setWorkPlace(place: String) {
+        store.edit { it[Keys.WorkPlace] = place.trim() }
+    }
+    suspend fun setOdometer(km: Double) {
+        store.edit { it[Keys.Odometer] = km.coerceAtLeast(0.0) }
+    }
+    /** Adds a finished trip's distance (only once the odometer has been set). */
+    suspend fun addToOdometer(km: Double) {
+        store.edit { p -> val now = p[Keys.Odometer] ?: 0.0; if (now > 0.0) p[Keys.Odometer] = now + km }
+    }
+    suspend fun setTripEndMinutes(min: Int) {
+        store.edit { it[Keys.TripEnd] = min }
+    }
+    suspend fun setKeepTripsDays(days: Int) {
+        store.edit { it[Keys.KeepTrips] = days }
+    }
+    suspend fun setOilChangedAt(km: Double) {
+        store.edit { it[Keys.OilAt] = km }
+    }
+    suspend fun setOilInterval(km: Int) {
+        store.edit { it[Keys.OilInterval] = km }
+    }
+    suspend fun setLightsFromUnit(on: Boolean) {
+        store.edit { it[Keys.LightsFromUnit] = on }
+    }
+    suspend fun setLightSignal(signal: String) {
+        store.edit { it[Keys.LightSignal] = signal }
     }
     suspend fun reset() {
         store.edit { it.clear() }

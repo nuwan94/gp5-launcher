@@ -25,7 +25,8 @@ Filament 1.77 (gltfio, filament-utils) for the 3D car. Planned: Room (trips, M5)
 :feature:home        Layout B frame with live speed / mode / battery and now playing
 :feature:settings    Display > Look: accent, rail side, gold trim, calm motion (live on every screen)
 :feature:vehicle     live gauges, i-DCD power flow, sensor tiles, read / clear trouble codes
-:feature:trips       placeholder (M5)
+:trips               TripRecorder (1 Hz from OBD), Room database (trips, samples, fill-ups), CSV export
+:feature:trips       Trips / Totals / Fuel log: speed and drive-mode chart, bar charts, add fill-up
 :feature:apps        drawer: installed apps, search, categories, 6 x 3 pages, dock / hide / app info
 ```
 
@@ -60,6 +61,21 @@ Home picks the renderer by GPU (Settings › Car › 3D view: Auto / Live 3D / T
 - **Turntable** (OpenGL ES 2 units such as Mali-400 / PowerVR SGX): 72 Cycles-rendered angles, lamps off and on, cross-faded; drag to turn.
 
 The assets are built in Blender 5.2 by local scripts (not in this repo: they need the source model): `build_android.py` makes `fit-gp5.glb` (78 meshes, 100k triangles, metres, front = +Z, nodes `GP5_Wheel_*`, materials `GP5_Head_*` / `GP5_Tail_*`), `render_stage.py` renders `studio.hdr`, the floor shadow and `turntable/`.
+
+## Without OBD
+The adapter is optional. With it unplugged (or Settings › OBD off), speed comes from the head unit's GPS: Home shows "km/h · GPS", a GPS chip appears in the status bar, and trips still record (distance, time, speed chart; drive mode and fuel need OBD). Allow location when the launcher asks on first start.
+
+**Headlights:** Settings › Headlights › Follow the head unit (on by default) lights the car's lamps from the head unit's night mode, which most units switch with the illumination (ILL) wire. If yours keeps it elsewhere, use **Find the light signal**: with the headlights off tap Start, switch them on, tap Done. The light button on Home still works by hand.
+
+## Trips and fuel
+Trips record by themselves while the OBD adapter is connected: a trip starts above 5 km/h and ends after the time set in Settings › Trips & fuel (5 / 10 / 20 min) stopped, or 90 s after the car stops answering (ignition off). Trips under 300 m are dropped; unstarred trips are deleted after the keep period.
+- Fuel is estimated from the MAF sensor, or from manifold pressure (speed-density) when the car has none. After two full fill-ups, trip economy is calibrated to the pump.
+- Set the odometer once in Settings; every trip adds its distance. "Oil changed" records the reading for the oil reminder in Totals.
+- Allow location (the **Name places** button in Trips) to name trips by their start and end area. Naming needs the internet once per trip.
+- **Export CSV** writes `trips-YYYY-MM-DD.csv` and `fuel.csv` into a folder you pick (a USB drive works).
+
+## Navigation
+Settings › Navigation: set Home and Work (an address, place name or `lat,lng`) and the maps app. Home then shows one-tap route buttons.
 
 ## Licences
 The 3D car (`car3d/src/main/assets/car/`) is a modified version of "2016 Honda Fit DBA-GK3" by Ddiaz Design (Sketchfab), CC BY-NC-SA 4.0: credit, non-commercial, share-alike. Details in `car3d/src/main/assets/car/LICENSE.txt`.

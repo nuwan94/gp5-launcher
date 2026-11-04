@@ -82,6 +82,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.gp5.launcher.core.model.MediaState
 import kotlinx.coroutines.delay
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import com.gp5.launcher.core.data.Navigator
+import com.gp5.launcher.core.data.HeadlightRepository
 import androidx.compose.ui.graphics.graphicsLayer
 
 @HiltViewModel
@@ -90,12 +94,12 @@ class HomeViewModel @Inject constructor(
     media: MediaRepository,
     private val apps: AppsRepository,
     settings: SettingsRepository,
+    private val headlights: HeadlightRepository,
 ) : ViewModel() {
     val settings = settings.settings.stateIn(viewModelScope, SharingStarted.Eagerly, LauncherSettings())
-    private val _lights = MutableStateFlow(false)
-    /** Headlights: a manual toggle until the ILL wire / body ECU source lands (DESIGN.md 9.2). */
-    val lights = _lights.asStateFlow()
-    fun toggleLights() { _lights.value = !_lights.value }
+    /** Headlights from the head unit (night mode / ILL wire); the button flips them by hand. */
+    val lights = headlights.state
+    fun toggleLights() = headlights.toggle()
     val state = vehicle.state
     private val mediaRepo = media
     val nowPlaying = media.state
@@ -116,7 +120,7 @@ class HomeViewModel @Inject constructor(
  * offers the installed navigation and music apps until their live feeds land.
  */
 @Composable
-fun HomeScreen(onOpenApps: () -> Unit, vm: HomeViewModel = hiltViewModel()) {
+fun HomeScreen(onOpenApps: () -> Unit, onOpenSettings: () -> Unit = {}, vm: HomeViewModel = hiltViewModel()) {
     val car by vm.state.collectAsStateWithLifecycle()
     val media by vm.nowPlaying.collectAsStateWithLifecycle()
     val apps by vm.appsState.collectAsStateWithLifecycle()
@@ -130,20 +134,19 @@ fun HomeScreen(onOpenApps: () -> Unit, vm: HomeViewModel = hiltViewModel()) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(g)) {
         Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(g)) {
             CarStage(
-                scene = CarScene(speedKmh = car.speedKmh, lightsOn = lights, ambient = look.ambient, connected = car.connected),
+                scene = CarScene(speedKmh = car.speedKmh, lightsOn = lights.on, ambient = look.ambient, connected = car.hasSpeed),
                 renderer = settings.carRenderer,
                 car = car,
                 onLights = vm::toggleLights,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
             )
             Column(Modifier.width(Gp5Dimens.RightCol).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(g)) {
-                LauncherCard(
-                    title = "Navigation",
-                    subtitle = "Start a route in your maps app",
+                NavCard(
+                    settings = settings,
                     apps = visible.filter { it.category == AppCategory.Navigation }.take(3),
                     icons = vm.icons,
                     onLaunch = vm::launch,
-                    phase = 120f,
+                    onOpenSettings = onOpenSettings,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
                 val musicApps = visible.filter { it.category == AppCategory.Media }.sortedByDescending { apps.isDocked(it.packageName) }.take(3)
@@ -184,14 +187,17 @@ private fun CarStage(scene: CarScene, renderer: com.gp5.launcher.core.model.CarR
     GpCard(modifier) {
         // The car fills the card (live Filament or the Blender turntable); drag turns it
         Car3d(scene, renderer, Modifier.fillMaxSize())
-        AnimatedVisibility(car.connected, enter = fadeIn(), exit = fadeOut()) {
+        // Speed from OBD, or GPS with the adapter unplugged; the drive mode needs OBD
+        AnimatedVisibility(car.hasSpeed, enter = fadeIn(), exit = fadeOut()) {
             Column(Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text("${shown.roundToInt()}", style = Gp5Type.Hero, color = Gp5Palette.Text)
-                    Text(" km/h", style = Gp5Type.Label, modifier = Modifier.padding(bottom = 10.dp))
+                    Text(if (car.speedSource == com.gp5.launcher.core.model.SpeedSource.Gps) " km/h · GPS" else " km/h", style = Gp5Type.Label, modifier = Modifier.padding(bottom = 10.dp))
                 }
-                Spacer(Modifier.height(8.dp))
-                ModePill(car.mode)
+                if (car.connected) {
+                    Spacer(Modifier.height(8.dp))
+                    ModePill(car.mode)
+                }
             }
         }
         Row(
@@ -360,4 +366,63 @@ private fun Transport(icon: Int, label: String, onClick: () -> Unit, enabled: Bo
 private fun clock(ms: Long): String {
     val s = ms / 1000
     return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
+}
+
+/** Navigation: one-tap Home and Work routes in the preferred maps app, plus the installed maps apps. */
+@Composable
+private fun NavCard(
+    settings: LauncherSettings,
+    apps: List<AppEntry>,
+    icons: IconLoader,
+    onLaunch: (String, android.graphics.Rect?) -> Unit,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier,
+) {
+    val context = LocalContext.current
+    val places = listOfNotNull(
+        settings.homePlace.takeIf { it.isNotBlank() }?.let { Triple("Home", it, DesignR.drawable.ic_home) },
+        settings.workPlace.takeIf { it.isNotBlank() }?.let { Triple("Work", it, DesignR.drawable.ic_briefcase) },
+    )
+    fun go(place: String) {
+        if (!Navigator.navigate(context, place, settings.navApp)) Toast.makeText(context, "No maps app can start a route", Toast.LENGTH_SHORT).show()
+    }
+    GpCard(modifier, phaseDeg = 120f) {
+        Column(Modifier.fillMaxSize().padding(16.dp)) {
+            Text("Navigation", style = Gp5Type.Title, color = Gp5Palette.Text, maxLines = 1)
+            if (places.isEmpty()) {
+                Text(
+                    "Set Home and Work in Settings for one-tap routes", style = Gp5Type.Label, maxLines = 2,
+                    modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable(onClick = onOpenSettings),
+                )
+            } else {
+                Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    places.forEach { (label, place, icon) -> PlaceButton(label, place, icon, Modifier.weight(1f)) { go(place) } }
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                apps.forEach { app -> AppTile(app, icons, onLaunch) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaceButton(label: String, place: String, icon: Int, modifier: Modifier, onClick: () -> Unit) {
+    val look = LocalGp5Look.current
+    val source = remember { MutableInteractionSource() }
+    val scale = pressScale(source)
+    Row(
+        modifier.height(56.dp).graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(Gp5Dimens.RadiusCtl)).background(Gp5Palette.Surface2)
+            .combinedClickable(interactionSource = source, indication = null, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(painterResource(icon), null, tint = look.accent, modifier = Modifier.size(22.dp))
+        Column(Modifier.padding(start = 10.dp)) {
+            Text(label, style = Gp5Type.Body, color = Gp5Palette.Text, maxLines = 1)
+            Text(place, style = Gp5Type.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
 }

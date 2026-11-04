@@ -44,6 +44,7 @@ dependencies {
     implementation(project(":core:data"))
     implementation(project(":obd"))
     implementation(project(":media"))
+    implementation(project(":trips"))
     implementation(project(":feature:home"))
     implementation(project(":feature:vehicle"))
     implementation(project(":feature:trips"))

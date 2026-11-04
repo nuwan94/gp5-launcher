@@ -21,7 +21,7 @@ private val DateFmt = SimpleDateFormat("EEE d MMM", Locale.UK)
 
 /** 40 dp status bar: clock and date on the left, system chips on the right (design/shell.css .status). */
 @Composable
-fun StatusBar(obdConnected: Boolean, outsideTempC: Int?, modifier: Modifier = Modifier) {
+fun StatusBar(obdConnected: Boolean, outsideTempC: Int?, gpsSpeed: Boolean = false, modifier: Modifier = Modifier) {
     val now by produceState(Date()) {
         while (true) {
             value = Date()
@@ -39,6 +39,7 @@ fun StatusBar(obdConnected: Boolean, outsideTempC: Int?, modifier: Modifier = Mo
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Gp5Dimens.S4)) {
             if (outsideTempC != null) Text("$outsideTempC°", style = Gp5Type.Label.copy(color = Gp5Palette.Text), fontSize = 14.sp)
+            if (gpsSpeed) Chip("GPS", on = true)
             if (obdConnected) Chip("OBD", on = true)
         }
     }

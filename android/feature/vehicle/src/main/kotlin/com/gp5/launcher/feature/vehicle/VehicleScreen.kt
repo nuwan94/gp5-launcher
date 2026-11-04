@@ -375,7 +375,7 @@ private fun tiles(c: VehicleState): List<Tile> {
             when { volts == null -> ""; volts < 12.2f -> "Low"; volts > 14.8f -> "High"; volts >= 13.2f -> "Charging"; else -> "OK" },
             when { volts == null -> Tone.None; volts < 12.2f -> Tone.Warn; volts > 14.8f -> Tone.Alert; else -> Tone.Ok }),
         Tile("Economy", if (ev) "EV" else v(eco, "%.1f"), if (ev) "" else "km/L",
-            when { ev -> "Engine off"; eco == null -> when { !c.connected -> ""; c.mafGs == null -> "No MAF data"; c.speedKmh < 3f -> "Stopped"; else -> "" }; else -> "Now" }, if (ev) Tone.Ok else Tone.Info),
+            when { ev -> "Engine off"; eco == null -> when { !c.connected -> ""; c.airflowGs == null -> "No airflow data"; c.speedKmh < 3f -> "Stopped"; else -> "" }; else -> "Now" }, if (ev) Tone.Ok else Tone.Info),
     )
 }
 
