@@ -53,7 +53,7 @@ Vehicle › Diagnostics reads stored (mode 03) and pending (mode 07) trouble cod
 Without the car: run a fake adapter on the PC and set the address to `10.0.2.2:35000` in the emulator.
 
 ## Now playing
-Home shows the track, art and controls of whatever app is playing (Spotify, YouTube Music, radio). Android only shares other apps' media sessions with apps that have notification access: tap **Allow** on the Home music card and switch on *GP5 Launcher now playing*.
+Home shows the track, art, progress and controls of whatever is playing: music apps (Spotify, YouTube Music, radio) and the phone over Bluetooth through the head unit's Bluetooth music app. The launcher reads media sessions (including Bluetooth AVRCP sessions and cover art), the common `metachanged` music broadcasts, and, as a last resort, a Bluetooth app's notification; without a session the buttons send media keys, which reach the phone. Settings › Now playing lists what the launcher can see. Android only shares other apps' media sessions with apps that have notification access: tap **Allow** on the Home music card and switch on *GP5 Launcher now playing*.
 
 ## 3D car
 Home picks the renderer by GPU (Settings › Car › 3D view: Auto / Live 3D / Turntable):

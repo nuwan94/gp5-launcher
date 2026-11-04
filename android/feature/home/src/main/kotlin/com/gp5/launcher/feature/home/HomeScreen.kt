@@ -314,6 +314,8 @@ private fun NowPlayingCard(media: MediaState, vm: HomeViewModel, modifier: Modif
                     val bmp = art
                     if (bmp != null) {
                         Image(remember(bmp) { bmp.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    } else if (media.bluetooth) {
+                        Icon(painterResource(DesignR.drawable.ic_bluetooth), null, tint = look.accent, modifier = Modifier.size(36.dp))
                     } else {
                         AppIcon(media.packageName, 40.dp, vm.icons)
                     }
@@ -321,7 +323,10 @@ private fun NowPlayingCard(media: MediaState, vm: HomeViewModel, modifier: Modif
                 Column(Modifier.weight(1f).padding(start = 14.dp)) {
                     Text(media.title, style = Gp5Type.Title, color = Gp5Palette.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (media.artist.isNotBlank()) Text(media.artist, style = Gp5Type.Label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(media.source, style = Gp5Type.Caption.copy(color = look.accent), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (media.bluetooth) Icon(painterResource(DesignR.drawable.ic_bluetooth), "Bluetooth", tint = look.accent, modifier = Modifier.size(14.dp).padding(end = 2.dp))
+                        Text(media.source, style = Gp5Type.Caption.copy(color = look.accent), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
             if (media.durationMs > 0) {

@@ -76,6 +76,7 @@ class SettingsViewModel @Inject constructor(
     private val repo: SettingsRepository,
     vehicle: VehicleStateRepository,
     private val lights: HeadlightRepository,
+    private val media: com.gp5.launcher.media.MediaRepository,
 ) : ViewModel() {
     val vehicle = vehicle.state
     fun obdEnabled(on: Boolean) = viewModelScope.launch { repo.setObdEnabled(on) }
@@ -97,6 +98,10 @@ class SettingsViewModel @Inject constructor(
     fun oilInterval(km: Int) = viewModelScope.launch { repo.setOilInterval(km) }
 
     val headlights = lights.state
+    val nowPlaying = media.state
+    val mediaSources = media.sources
+    fun allowMedia() = media.requestAccess()
+    fun refreshMedia() = media.refresh()
     fun lightsFromUnit(on: Boolean) = viewModelScope.launch { repo.setLightsFromUnit(on) }
     fun lightSource(signal: String) = lights.describe(signal)
 
@@ -188,6 +193,26 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
             Group {
                 SettingRow("3D view", if (active.isEmpty()) "Auto picks live 3D when the unit has OpenGL ES 3" else "Showing: $active") {
                     Segmented(listOf("Auto", "Live 3D", "Turntable"), s.carRenderer.ordinal) { vm.carRenderer(CarRenderer.entries[it]) }
+                }
+            }
+            Text("Now playing", style = Gp5Type.Title, color = Gp5Palette.Text, modifier = Modifier.padding(top = 24.dp))
+            Text("Music apps and phone music over Bluetooth on the Home card", style = Gp5Type.Label, modifier = Modifier.padding(top = 2.dp, bottom = 16.dp))
+            val np by vm.nowPlaying.collectAsStateWithLifecycle()
+            val sources by vm.mediaSources.collectAsStateWithLifecycle()
+            androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { vm.refreshMedia() }
+            Group {
+                SettingRow(
+                    "Notification access",
+                    if (np.hasAccess) "Allowed: the launcher can see what is playing" else "Needed to show music from other apps and Bluetooth",
+                ) {
+                    if (np.hasAccess) Box(Modifier.size(12.dp).clip(CircleShape).background(Gp5Palette.Ev))
+                    else ActionPill("Allow", LocalGp5Look.current.accent) { vm.allowMedia() }
+                }
+                if (np.hasAccess) {
+                    SettingRow(
+                        "Seen now",
+                        if (sources.isEmpty()) "Nothing yet. Play music on the phone over Bluetooth or open a music app" else sources.joinToString("  ·  "),
+                    ) {}
                 }
             }
             Text("Headlights", style = Gp5Type.Title, color = Gp5Palette.Text, modifier = Modifier.padding(top = 24.dp))

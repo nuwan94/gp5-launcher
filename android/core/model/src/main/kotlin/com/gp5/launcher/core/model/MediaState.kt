@@ -18,6 +18,10 @@ data class MediaState(
     val speed: Float = 1f,
     val canSkipNext: Boolean = false,
     val canSkipPrevious: Boolean = false,
+    /** Music from a phone over Bluetooth (the head unit's Bluetooth music app). */
+    val bluetooth: Boolean = false,
+    /** False when only a notification shows the track: play state is a guess and buttons send media keys. */
+    val playingKnown: Boolean = true,
 ) {
     val active: Boolean get() = packageName.isNotEmpty() && title.isNotEmpty()
 
