@@ -47,9 +47,11 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
     companion object {
         private const val TAG = "FilamentCar"
         private const val TARGET_Y = 0.62f
+        /** Lens focal length (mm, 24 mm-high film), shared with the road drawn behind the car. */
+        internal const val FOCAL_MM = 50f
         private const val WHEEL_RADIUS = 0.296f
         private const val FRAME_NS = 30_000_000L                     // 30 fps cap (DESIGN.md 9.1)
-        private val STAGE = doubleArrayOf(0.0075, 0.0075, 0.0075, 1.0) // #151515, linear
+        private val CLEAR = doubleArrayOf(0.0, 0.0, 0.0, 0.0)           // transparent: the stage and road are drawn behind
 
         @Volatile private var instance: FilamentCar? = null
         fun get(context: Context): FilamentCar =
@@ -81,6 +83,8 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
     private var target = CarScene()
     private val yaw = YawController(CarCamera.HERO_YAW)
     private var drive = 0f                 // 0 parked camera .. 1 chase camera
+    /** Camera now: yaw, distance, height, target height (for the road layer). */
+    @Volatile var pose = floatArrayOf(CarCamera.HERO_YAW, 6.4f, 1.75f, TARGET_Y); private set
     private var lamps = 0f                 // 0 off .. 1 on
     private var wheelAngle = 0f
     private var lastFrameNs = 0L
@@ -97,6 +101,7 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
 
     init {
         view.scene = scene
+        view.blendMode = View.BlendMode.TRANSLUCENT
         view.camera = camera
         view.antiAliasing = View.AntiAliasing.NONE          // MSAA below is enough; FXAA costs a full pass
         view.multiSampleAntiAliasingOptions = view.multiSampleAntiAliasingOptions.apply { enabled = true; sampleCount = 4 }
@@ -104,7 +109,7 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
         view.ambientOcclusionOptions = view.ambientOcclusionOptions.apply { enabled = false }
         view.colorGrading = ColorGrading.Builder().toneMapper(ToneMapper.Agx()).build(engine)
         camera.setExposure(1f)
-        renderer.clearOptions = renderer.clearOptions.apply { clear = true; clearColor = STAGE }
+        renderer.clearOptions = renderer.clearOptions.apply { clear = true; clearColor = CLEAR }
         loadIbl()
         loadCar()
     }
@@ -160,11 +165,11 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
         detach()
         displayHelper = DisplayHelper(textureView.context)
         uiHelper = UiHelper(UiHelper.ContextErrorPolicy.DONT_CHECK).apply {
-            isOpaque = true
+            isOpaque = false
             renderCallback = object : UiHelper.RendererCallback {
                 override fun onNativeWindowChanged(surface: Surface) {
                     swapChain?.let { engine.destroySwapChain(it) }
-                    swapChain = engine.createSwapChain(surface)
+                    swapChain = engine.createSwapChain(surface, uiHelper?.swapChainFlags ?: 0L)
                     displayHelper?.attach(renderer, textureView.display)
                     dirty = true
                 }
@@ -175,7 +180,7 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
                 }
                 override fun onResized(width: Int, height: Int) {
                     view.viewport = Viewport(0, 0, width, height)
-                    camera.setLensProjection(50.0, width.toDouble() / height, 0.1, 100.0)
+                    camera.setLensProjection(FOCAL_MM.toDouble(), width.toDouble() / height, 0.1, 100.0)
                     dirty = true
                 }
             }
@@ -200,9 +205,6 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
         target = s
     }
 
-    /** Horizontal drag on the stage: turn the car by hand; auto motion resumes 4 s after release. */
-    fun drag(dxFraction: Float) { yaw.drag(dxFraction, System.nanoTime()); dirty = true }
-    fun release() { yaw.release(System.nanoTime()); dirty = true }
 
     // ---------------------------------------------------------------- frame
 
@@ -239,11 +241,11 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
     private fun step(dt: Float, now: Long): Boolean {
         val s = target
         var moving = false
-        // camera: parked orbit / hero pose -> chase three-quarter while driving
+        // camera: front three-quarter parked -> chase view from behind while driving
         val d0 = drive
         drive += ((if (s.driving) 1f else 0f) - drive) * (1f - exp(-dt / 0.9f))
         if (abs(drive - d0) > 1e-4f) moving = true
-        if (yaw.step(dt, now, s.driving, s.ambient)) moving = true
+        if (yaw.step(dt, s.driving, !s.ambient)) moving = true
         // wheels roll with the speed
         if (s.speedKmh > 0.1f) {
             wheelAngle = (wheelAngle + s.speedKmh / 3.6f / WHEEL_RADIUS * dt) % (2f * Math.PI.toFloat())
@@ -263,9 +265,10 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
 
     private fun placeCamera() {
         val r = Math.toRadians(yaw.angle.toDouble())
-        val dist = lerp(6.4f, 6.0f, drive)
-        val h = lerp(1.75f, 1.5f, drive)
+        val dist = lerp(6.4f, 7.4f, drive)
+        val h = lerp(1.75f, 2.0f, drive)
         val ex = (sin(r) * dist).toFloat(); val ez = (cos(r) * dist).toFloat()
+        pose = floatArrayOf(yaw.angle, dist, h, TARGET_Y)
         camera.lookAt(ex.toDouble(), h.toDouble(), ez.toDouble(), 0.0, TARGET_Y.toDouble(), 0.0, 0.0, 1.0, 0.0)
     }
 

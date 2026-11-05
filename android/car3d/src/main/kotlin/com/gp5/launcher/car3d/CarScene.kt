@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 data class CarScene(
     val speedKmh: Float = 0f,
     val lightsOn: Boolean = false,
-    /** Ambient motion allowed (parked, calm motion off): the camera orbits slowly. */
+    /** Motion allowed (calm motion off): the camera swings between the parked and chase views instead of cutting. */
     val ambient: Boolean = true,
     val connected: Boolean = true,
 ) {
@@ -18,8 +18,7 @@ data class CarScene(
 internal object CarCamera {
     /** Yaw convention shared with the Blender turntable: 0 = straight ahead of the car, 90 = its left side. */
     const val HERO_YAW = 35f          // parked hero pose, front three-quarter
-    const val CHASE_YAW = 155f        // driving, rear three-quarter
-    const val ORBIT_SECONDS = 40f     // one slow turn when parked
+    const val CHASE_YAW = 170f        // driving, from behind (slightly off-centre, on a turntable frame)
     const val TURNTABLE_FRAMES = 72
 }
 

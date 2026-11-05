@@ -41,7 +41,7 @@ Emulator profile `gp5_headunit` (1024 × 600, 160 dpi, landscape) is set up in `
 
 ## As the launcher
 After install, press Home and choose **GP5 Launcher → Always** (or Settings › Apps › Default apps › Home app).
-Drag the car on the stage to turn it. Above 5 km/h (from OBD) the gold-trim and logo animations pause.
+Parked, the car rests on its front three-quarter; above 5 km/h the camera swings behind it onto a moving road and the gold-trim and logo animations pause.
 
 ## OBD (ELM327 Wi-Fi)
 1. Plug the adapter in and switch the car on.
@@ -57,8 +57,8 @@ Home shows the track, art, progress and controls of whatever is playing: music a
 
 ## 3D car
 Home picks the renderer by GPU (Settings › Car › 3D view: Auto / Live 3D / Turntable):
-- **Live 3D** (OpenGL ES 3): Filament, studio IBL from `studio.hdr`, 30 fps cap, slow orbit when parked, rear three-quarter chase when driving, wheels spin with speed, lamps fade on. Falls back to the turntable if it fails or drops under ~14 fps for 3 s.
-- **Turntable** (OpenGL ES 2 units such as Mali-400 / PowerVR SGX): 72 Cycles-rendered angles, lamps off and on, cross-faded; drag to turn.
+- **Live 3D** (OpenGL ES 3): Filament, studio IBL from `studio.hdr`, 30 fps cap, front three-quarter when parked, chase view from behind on a scrolling road when driving, wheels spin with speed, lamps fade on. Falls back to the turntable if it fails or drops under ~14 fps for 3 s.
+- **Turntable** (OpenGL ES 2 units such as Mali-400 / PowerVR SGX): 72 Cycles-rendered angles, lamps off and on, cross-faded, with the same road drawn in the frame's perspective.
 
 The assets are built in Blender 5.2 by local scripts (not in this repo: they need the source model): `build_android.py` makes `fit-gp5.glb` (78 meshes, 100k triangles, metres, front = +Z, nodes `GP5_Wheel_*`, materials `GP5_Head_*` / `GP5_Tail_*`), `render_stage.py` renders `studio.hdr`, the floor shadow and `turntable/`.
 

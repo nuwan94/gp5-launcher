@@ -134,7 +134,7 @@ fun HomeScreen(onOpenApps: () -> Unit, onOpenSettings: () -> Unit = {}, vm: Home
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(g)) {
         Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(g)) {
             CarStage(
-                scene = CarScene(speedKmh = car.speedKmh, lightsOn = lights.on, ambient = look.ambient, connected = car.hasSpeed),
+                scene = CarScene(speedKmh = car.speedKmh, lightsOn = lights.on, ambient = !settings.calmMotion, connected = car.hasSpeed),
                 renderer = settings.carRenderer,
                 car = car,
                 onLights = vm::toggleLights,
@@ -185,7 +185,7 @@ private fun CarStage(scene: CarScene, renderer: com.gp5.launcher.core.model.CarR
     val shown by animateFloatAsState(car.speedKmh, tween(Gp5Motion.Base), label = "speed")
     val look = LocalGp5Look.current
     GpCard(modifier) {
-        // The car fills the card (live Filament or the Blender turntable); drag turns it
+        // The car fills the card (live Filament or the Blender turntable): front three-quarter parked, from behind on a moving road while driving
         Car3d(scene, renderer, Modifier.fillMaxSize())
         // Speed from OBD, or GPS with the adapter unplugged; the drive mode needs OBD
         AnimatedVisibility(car.hasSpeed, enter = fadeIn(), exit = fadeOut()) {

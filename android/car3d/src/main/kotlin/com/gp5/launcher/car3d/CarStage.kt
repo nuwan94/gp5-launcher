@@ -10,7 +10,7 @@ import android.util.Log
 import android.util.LruCache
 import android.view.TextureView
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -27,7 +27,6 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -68,14 +67,6 @@ fun CarStage(scene: CarScene, renderer: CarRenderer, modifier: Modifier = Modifi
     }
 }
 
-/** Horizontal drag reports the distance as a fraction of the stage width. */
-private fun Modifier.stageDrag(onDrag: (Float) -> Unit, onEnd: () -> Unit): Modifier =
-    pointerInput(Unit) {
-        detectHorizontalDragGestures(onDragEnd = onEnd, onDragCancel = onEnd) { change, dx ->
-            change.consume(); onDrag(dx / size.width)
-        }
-    }
-
 @Composable
 private fun LiveCar(scene: CarScene, modifier: Modifier, onFailure: (String) -> Unit) {
     val context = LocalContext.current
@@ -97,18 +88,24 @@ private fun LiveCar(scene: CarScene, modifier: Modifier, onFailure: (String) -> 
         lifecycle.addObserver(obs)
         onDispose { lifecycle.removeObserver(obs) }
     }
-    Box(modifier.fillMaxSize()) {
+    Box(modifier.fillMaxSize().background(STAGE_COLOR)) {
+        // the road under the car, then the car (a transparent TextureView) on top of it
+        RoadLayer(scene, camera = {
+            val p = car.pose
+            RoadCam(p[0], p[1], p[2], p[3], focalPx = size.height / 2f * FilamentCar.FOCAL_MM / 12f, cx = size.width / 2f, cy = size.height / 2f)
+        })
         AndroidView(
             factory = { ctx -> TextureView(ctx).also { car.attach(it) } },
             onRelease = { car.detach() },
             modifier = Modifier.fillMaxSize(),
         )
-        // gestures on a Compose layer above the TextureView
-        Box(Modifier.fillMaxSize().stageDrag(car::drag, car::release))
     }
 }
 
 // ---------------------------------------------------------------- turntable (OpenGL ES 2 units)
+
+/** #151515: the stage behind the car (Filament's old clear colour). */
+private val STAGE_COLOR = androidx.compose.ui.graphics.Color(0xFF151515)
 
 private object Frames {
     const val SRC_W = 800
@@ -143,14 +140,14 @@ private fun TurntableCar(scene: CarScene, modifier: Modifier) {
     var targetW by remember { mutableIntStateOf(0) }
     var lamps by remember { mutableFloatStateOf(0f) }
 
-    // motion (finger, fling, orbit, chase) and the lamp cross-fade
+    // camera swing (parked / chase) and the lamp cross-fade
     LaunchedEffect(Unit) {
         var last = 0L
         while (isActive) {
             withFrameNanos { now ->
                 val dt = if (last == 0L) 0f else ((now - last) / 1e9f).coerceAtMost(0.1f)
                 last = now
-                if (yaw.step(dt, System.nanoTime(), s.driving, s.ambient)) angle = yaw.angle
+                if (yaw.step(dt, s.driving, !s.ambient)) angle = yaw.angle
                 val l = if (s.lightsOn) 1f else 0f
                 if (lamps != l) lamps = (lamps + (l - lamps) * (1f - exp(-dt / 0.1f))).let { if (abs(it - l) < 0.01f) l else it }
             }
@@ -183,10 +180,18 @@ private fun TurntableCar(scene: CarScene, modifier: Modifier) {
 
     val paint = remember { Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG) }
     val m = remember { Matrix() }
+    // the road, in the perspective of the Blender camera (render_stage.py: 50 mm on a 36 mm-wide sensor,
+    // 7.4 m out, 1.9 m up) at the frame on screen
+    Box(modifier.fillMaxSize()) {
+    RoadLayer(scene, camera = {
+        val k = min(size.width / Frames.SRC_W, size.height / Frames.SRC_H)
+        val ox = (size.width - Frames.SRC_W * k) / 2f
+        val oy = (size.height - Frames.SRC_H * k) / 2f
+        RoadCam(index * 360f / count, 7.4f, 1.9f, 0.62f, focalPx = Frames.SRC_W / 2f * 50f / 18f * k, cx = ox + Frames.SRC_W / 2f * k, cy = oy + Frames.SRC_H / 2f * k)
+    })
     Canvas(
-        modifier.fillMaxSize()
-            .onSizeChanged { targetW = min(it.width, Frames.SRC_W) }
-            .stageDrag({ yaw.drag(it, System.nanoTime()) }, { yaw.release(System.nanoTime()) }),
+        Modifier.fillMaxSize()
+            .onSizeChanged { targetW = min(it.width, Frames.SRC_W) },
     ) {
         // ContentScale.Fit of an 800 x 500 frame, centred
         val k = min(size.width / Frames.SRC_W, size.height / Frames.SRC_H)
@@ -203,5 +208,6 @@ private fun TurntableCar(scene: CarScene, modifier: Modifier) {
             frame(off, 1f)
             if (lamps > 0.01f) frame(on, lamps)
         }
+    }
     }
 }
