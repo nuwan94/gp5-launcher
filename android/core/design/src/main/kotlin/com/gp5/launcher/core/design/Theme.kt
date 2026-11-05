@@ -4,12 +4,16 @@ import android.graphics.Typeface
 import android.provider.Settings
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -40,8 +44,8 @@ object Gp5Type {
     val Display = TextStyle(fontFamily = Gp5Num, fontWeight = FontWeight.SemiBold, fontSize = 34.sp)
     val Title = TextStyle(fontFamily = Gp5Sans, fontWeight = FontWeight.Medium, fontSize = 20.sp)
     val Body = TextStyle(fontFamily = Gp5Sans, fontSize = 16.sp)
-    val Label = TextStyle(fontFamily = Gp5Sans, fontSize = 13.sp, color = Gp5Palette.Text2)
-    val Caption = TextStyle(fontFamily = Gp5Sans, fontSize = 12.sp, color = Gp5Palette.Text2)
+    val Label: TextStyle get() = TextStyle(fontFamily = Gp5Sans, fontSize = 13.sp, color = Gp5Palette.Text2)
+    val Caption: TextStyle get() = TextStyle(fontFamily = Gp5Sans, fontSize = 12.sp, color = Gp5Palette.Text2)
 }
 
 /** True when the user (or a battery saver) turned system animations off: treat as reduced motion. */
@@ -54,10 +58,21 @@ fun systemAnimationsOff(): Boolean {
 }
 
 @Composable
-fun Gp5Theme(look: Gp5Look = Gp5Look(), content: @Composable () -> Unit) {
+fun Gp5Theme(look: Gp5Look = Gp5Look(), night: Boolean = true, content: @Composable () -> Unit) {
     val reduced = systemAnimationsOff()
+    // day / night: set at once on start, then a 600 ms cross-fade of every colour
+    remember { Gp5Palette.night = if (night) 1f else 0f }
+    LaunchedEffect(night) {
+        val to = if (night) 1f else 0f
+        if (Gp5Palette.night != to) {
+            if (reduced) Gp5Palette.night = to
+            else animate(Gp5Palette.night, to, animationSpec = tween(600, easing = Gp5Motion.EaseOut)) { v, _ -> Gp5Palette.night = v }
+        }
+    }
+    // the accent a shade darker in daylight so it holds its contrast on the light surfaces
+    val accent = lerp(look.accent, Color.Black, 0.14f * (1f - Gp5Palette.night))
     val scheme = darkColorScheme(
-        primary = look.accent,
+        primary = accent,
         onPrimary = Color.White,
         background = Gp5Palette.Bg,
         onBackground = Gp5Palette.Text,
@@ -67,7 +82,7 @@ fun Gp5Theme(look: Gp5Look = Gp5Look(), content: @Composable () -> Unit) {
         onSurfaceVariant = Gp5Palette.Text2,
         outline = Gp5Palette.Line,
     )
-    CompositionLocalProvider(LocalGp5Look provides look.copy(ambient = look.ambient && !reduced)) {
+    CompositionLocalProvider(LocalGp5Look provides look.copy(accent = accent, ambient = look.ambient && !reduced)) {
         MaterialTheme(colorScheme = scheme, content = content)
     }
 }

@@ -1,32 +1,79 @@
 package com.gp5.launcher.core.design
 
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 
 // 1:1 port of design/tokens.css (1 px in the prototype = 1 dp on the 1024x600 head unit).
 
+/** One complete set of colours. [Night] is design/tokens.css; [Day] is the light theme for sunlight. */
+class Gp5Colors(
+    val bg: Color, val rail: Color, val surface1: Color, val surface2: Color, val stage: Color,
+    val line: Color, val lineStrong: Color, val text: Color, val text2: Color, val text3: Color,
+    val ev: Color, val regen: Color, val warn: Color,
+    val goldDim: Color, val goldMid: Color, val goldHi: Color,
+    val road: Color, val roadPaint: Color,
+) {
+    companion object {
+        val Night = Gp5Colors(
+            bg = Color(0xFF121212), rail = Color(0xFF0C0C0C), surface1 = Color(0xFF1A1A1A), surface2 = Color(0xFF232323),
+            stage = Color(0xFF151515), line = Color(0xFF2A2A2A), lineStrong = Color(0xFF3A3A3A),
+            text = Color(0xFFF2F0EA), text2 = Color(0xFFA8A69E), text3 = Color(0xFF6E6C66),
+            ev = Color(0xFF8FD14F), regen = Color(0xFF4EA8F2), warn = Color(0xFFEF9F27),
+            // gold trim (design/gold.css), matching the car's gold Honda emblems
+            goldDim = Color(0x4DD4A640), goldMid = Color(0xA6E2BA60), goldHi = Color(0xFFFFF1C4),
+            road = Color(0xFF242424), roadPaint = Color(0xFFD8D8D8),
+        )
+        /** Warm paper-white (not pure white: less glare), darker accents and antique gold so they read in sunlight. */
+        val Day = Gp5Colors(
+            bg = Color(0xFFECEAE4), rail = Color(0xFFE1DED6), surface1 = Color(0xFFFAF9F6), surface2 = Color(0xFFEFEDE8),
+            stage = Color(0xFFE4E1D9), line = Color(0xFFD6D2C8), lineStrong = Color(0xFFC3BFB5),
+            text = Color(0xFF1A1A18), text2 = Color(0xFF55534D), text3 = Color(0xFF8A877F),
+            ev = Color(0xFF3E8E1F), regen = Color(0xFF1F6FB8), warn = Color(0xFFB86E0A),
+            goldDim = Color(0x99B08A2E), goldMid = Color(0xCC9C7A24), goldHi = Color(0xFFC9A24A),
+            road = Color(0xFFCFCBC2), roadPaint = Color(0xFFFBFAF7),
+        )
+    }
+}
+
+/**
+ * The colours in use. [night] runs 0 (day) .. 1 (night) and is animated by [Gp5Theme]; it is snapshot
+ * state, so every composable and canvas that reads a colour follows a theme change by itself.
+ */
 object Gp5Palette {
-    val Bg = Color(0xFF121212)
-    val Rail = Color(0xFF0C0C0C)
-    val Surface1 = Color(0xFF1A1A1A)
-    val Surface2 = Color(0xFF232323)
-    val Stage = Color(0xFF151515)
-    val Line = Color(0xFF2A2A2A)
-    val LineStrong = Color(0xFF3A3A3A)
+    var night by mutableFloatStateOf(1f)
+    val isDay: Boolean get() = night < 0.5f
+    private fun mix(f: (Gp5Colors) -> Color): Color {
+        val n = night
+        return if (n >= 1f) f(Gp5Colors.Night) else if (n <= 0f) f(Gp5Colors.Day) else lerp(f(Gp5Colors.Day), f(Gp5Colors.Night), n)
+    }
 
-    val Text = Color(0xFFF2F0EA)
-    val Text2 = Color(0xFFA8A69E)
-    val Text3 = Color(0xFF6E6C66)
+    val Bg: Color get() = mix { it.bg }
+    val Rail: Color get() = mix { it.rail }
+    val Surface1: Color get() = mix { it.surface1 }
+    val Surface2: Color get() = mix { it.surface2 }
+    val Stage: Color get() = mix { it.stage }
+    val Line: Color get() = mix { it.line }
+    val LineStrong: Color get() = mix { it.lineStrong }
 
-    val Ev = Color(0xFF8FD14F)
-    val Regen = Color(0xFF4EA8F2)
-    val Warn = Color(0xFFEF9F27)
+    val Text: Color get() = mix { it.text }
+    val Text2: Color get() = mix { it.text2 }
+    val Text3: Color get() = mix { it.text3 }
 
-    // Gold trim (design/gold.css), matching the car's gold Honda emblems
-    val GoldDim = Color(0x4DD4A640)      // rgba(212,166,64,.30)
-    val GoldMid = Color(0xA6E2BA60)      // rgba(226,186,96,.65)
-    val GoldHi = Color(0xFFFFF1C4)
+    val Ev: Color get() = mix { it.ev }
+    val Regen: Color get() = mix { it.regen }
+    val Warn: Color get() = mix { it.warn }
+
+    val GoldDim: Color get() = mix { it.goldDim }
+    val GoldMid: Color get() = mix { it.goldMid }
+    val GoldHi: Color get() = mix { it.goldHi }
+
+    val Road: Color get() = mix { it.road }
+    val RoadPaint: Color get() = mix { it.roadPaint }
 }
 
 object Gp5Dimens {

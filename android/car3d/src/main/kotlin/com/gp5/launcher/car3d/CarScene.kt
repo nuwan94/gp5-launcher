@@ -11,6 +11,13 @@ data class CarScene(
     /** Motion allowed (calm motion off): the camera swings between the parked and chase views instead of cutting. */
     val ambient: Boolean = true,
     val connected: Boolean = true,
+    /** Light theme: light stage, road and floor. */
+    val day: Boolean = false,
+    /**
+     * Chase view (from behind, on the road). Set by the stage from [speedKmh] with hysteresis, so GPS
+     * jitter does not swing the camera: on after 2 s above 8 km/h, off after 8 s below 4 km/h.
+     */
+    val chase: Boolean = false,
 ) {
     val driving: Boolean get() = speedKmh > 5f
 }

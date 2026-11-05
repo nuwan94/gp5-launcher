@@ -1,13 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- text-to-speech engines are hidden from apps targeting API 30+ unless declared -->
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.TTS_SERVICE" />
-        </intent>
-    </queries>
-
     <application
         android:name=".Gp5App"
         android:allowBackup="false"

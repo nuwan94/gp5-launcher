@@ -41,7 +41,7 @@ Emulator profile `gp5_headunit` (1024 × 600, 160 dpi, landscape) is set up in `
 
 ## As the launcher
 After install, press Home and choose **GP5 Launcher → Always** (or Settings › Apps › Default apps › Home app).
-Parked, the car rests on its front three-quarter; above 5 km/h the camera swings behind it onto a moving road and the gold-trim and logo animations pause.
+Parked, the car rests on its front three-quarter; once it is clearly moving (2 s above 8 km/h) the camera swings behind it onto a moving road, and it swings slowly back after 8 s below 4 km/h, so GPS jitter at a standstill does not flip the view. With the headlights on, light beams and a pool of light on the floor come from the car's own lamps. At night a soft spotlight behind the car keeps the black body readable. While driving, coconut palms, trees and road signs pass along the verges at the real speed. The gold-trim and logo animations pause while driving.
 
 ## OBD (ELM327 Wi-Fi)
 1. Plug the adapter in and switch the car on.
@@ -65,7 +65,7 @@ The assets are built in Blender 5.2 by local scripts (not in this repo: they nee
 ## Without OBD
 The adapter is optional. With it unplugged (or Settings › OBD off), speed comes from the head unit's GPS: Home shows "km/h · GPS", a GPS chip appears in the status bar, and trips still record (distance, time, speed chart; drive mode and fuel need OBD). Allow location when the launcher asks on first start.
 
-**Headlights:** Settings › Headlights › Follow the head unit (on by default) lights the car's lamps from the head unit's night mode, which most units switch with the illumination (ILL) wire. If yours keeps it elsewhere, use **Find the light signal**: with the headlights off tap Start, switch them on, tap Done. The light button on Home still works by hand.
+**Headlights:** Settings › Headlights › Follow the head unit (on by default) lights the car's lamps from the head unit's night mode, which most units switch with the illumination (ILL) wire. If yours keeps it elsewhere, use **Find the light signal**: with the headlights off tap Start, switch them on, tap Done.
 
 ## Trips and fuel
 Trips record by themselves while the OBD adapter is connected: a trip starts above 5 km/h and ends after the time set in Settings › Trips & fuel (5 / 10 / 20 min) stopped, or 90 s after the car stops answering (ignition off). Trips under 300 m are dropped; unstarred trips are deleted after the keep period.
@@ -78,7 +78,10 @@ Trips record by themselves while the OBD adapter is connected: a trip starts abo
 Settings › Navigation: set Home and Work (an address, place name or `lat,lng`) and the maps app. Home then shows one-tap route buttons.
 
 ## Welcome
-When the head unit starts (or wakes after the screen was off for a minute, as most units do on ignition), Home plays a short greeting: the gold Honda logo, "Good morning, <name>" and the date, then the car's lamps flash as Home appears. A short chime plays and the greeting is spoken through the head unit's text-to-speech (music from the phone dips under it); a name left as "User" is not spoken. Set the name (default "User"), switch the voice or music off, turn it off, or play it from Settings › Display › Welcome. It is skipped while driving; a tap skips it; calm motion makes it a plain fade.
+When the head unit starts (or wakes after the screen was off for a minute, as most units do on ignition), Home plays a short greeting: the gold Honda logo, "Good morning, <name>" and the date, then the car's lamps flash as Home appears. A cabin announcement plays with it: a ding-dong, then one of seven recorded "welcome aboard" lines (a morning and an afternoon version of each, picked at random, never the same twice in a row) in a clear voice, with the welcome chime quietly underneath (Settings › Display › Announcements: tick which lines are in the pick and play each one); music from the phone dips under them. The voice is Piper `en_GB-cori-high` (public-domain LibriVox data), recorded offline, so it starts with the animation. Set the name (default "User"), switch the voice or music off, turn it off, or play it from Settings › Display › Welcome. It is skipped while driving; a tap skips it; calm motion makes it a plain fade.
+
+## Day and night
+Settings › Display › Theme: **Auto** (default) is a light theme by day (warm paper-white, darker accents, antique gold, a light studio floor) and the dark theme once the headlights are on; without a light signal it goes by the clock (dark from 6 pm to 6 am). A change from the lights waits 3 s and cross-fades. **Day** and **Night** fix it.
 
 ## Settings
 Categories on the left (Vehicle & OBD, Display, Units, Navigation, Home & car, Trips & fuel, Data & backup, About), each with a live summary. Units switches economy between km/L and L/100 km everywhere. Data & backup saves the settings, dock and hidden apps as a JSON file (a USB drive works), restores it, or resets the launcher (trips and the fuel log are kept); these are locked while driving.

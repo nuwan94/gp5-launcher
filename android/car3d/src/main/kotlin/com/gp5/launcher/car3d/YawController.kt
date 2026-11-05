@@ -6,7 +6,8 @@ import kotlin.math.exp
 /**
  * Camera yaw for both car views. Not touchable: parked it rests on the front three-quarter
  * ([CarCamera.HERO_YAW]); driving it swings round the car's left side to the chase view from behind
- * ([CarCamera.CHASE_YAW]) and back again when the car stops. [calm] snaps instead of swinging.
+ * ([CarCamera.CHASE_YAW]) in about 2 s, and back slowly (about 6 s) once the car has stopped.
+ * [calm] snaps instead of swinging.
  * [angle] is 0..360.
  */
 internal class YawController(initial: Float) {
@@ -20,7 +21,7 @@ internal class YawController(initial: Float) {
         var d = (goal - angle) % 360f
         if (d > 180f) d -= 360f; if (d < -180f) d += 360f
         if (d == 0f) return false
-        yaw += if (calm || abs(d) < 0.05f) d else d * (1f - exp(-dt / 0.8f))
+        yaw += if (calm || abs(d) < 0.05f) d else d * (1f - exp(-dt / if (driving) 0.7f else 2.0f))
         return true
     }
 }

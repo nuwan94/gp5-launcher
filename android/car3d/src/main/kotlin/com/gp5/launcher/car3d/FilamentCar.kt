@@ -27,6 +27,8 @@ import com.google.android.filament.gltfio.UbershaderProvider
 import com.google.android.filament.utils.HDRLoader
 import com.google.android.filament.utils.IBLPrefilterContext
 import com.google.android.filament.utils.Utils
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
@@ -46,6 +48,8 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
 
     companion object {
         private const val TAG = "FilamentCar"
+        /** Body panel materials (GP5_Paint, plus panels the source model left in its own dark metal). */
+        private val PAINT = setOf("GP5_Paint", "Color_001_1", "Material22", "material_36")
         private const val TARGET_Y = 0.62f
         /** Lens focal length (mm, 24 mm-high film), shared with the road drawn behind the car. */
         internal const val FOCAL_MM = 50f
@@ -84,7 +88,8 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
     private val yaw = YawController(CarCamera.HERO_YAW)
     private var drive = 0f                 // 0 parked camera .. 1 chase camera
     /** Camera now: yaw, distance, height, target height (for the road layer). */
-    @Volatile var pose = floatArrayOf(CarCamera.HERO_YAW, 6.4f, 1.75f, TARGET_Y); private set
+    /** Snapshot state (written on the main thread), so the road and beam layers redraw as the camera moves. */
+    var pose by androidx.compose.runtime.mutableStateOf(floatArrayOf(CarCamera.HERO_YAW, 6.4f, 1.75f, TARGET_Y)); private set
     private var lamps = 0f                 // 0 off .. 1 on
     private var wheelAngle = 0f
     private var lastFrameNs = 0L
@@ -94,6 +99,8 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
     private val wheels = mutableListOf<Pair<Int, FloatArray>>()   // entity, original local transform
     private val headLamps = mutableListOf<MaterialInstance>()
     private val tailLamps = mutableListOf<MaterialInstance>()
+    private var floor: MaterialInstance? = null
+    private var floorDay = false
 
     /** Called after the frame budget has been missed for 3 s while animating. */
     var onTooSlow: (() -> Unit)? = null
@@ -105,7 +112,7 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
         view.camera = camera
         view.antiAliasing = View.AntiAliasing.NONE          // MSAA below is enough; FXAA costs a full pass
         view.multiSampleAntiAliasingOptions = view.multiSampleAntiAliasingOptions.apply { enabled = true; sampleCount = 4 }
-        view.bloomOptions = view.bloomOptions.apply { enabled = false; strength = 0.12f; levels = 5; threshold = true } // on only while lamps glow
+        view.bloomOptions = view.bloomOptions.apply { enabled = false }   // no halo: the beams are drawn as light in the scene
         view.ambientOcclusionOptions = view.ambientOcclusionOptions.apply { enabled = false }
         view.colorGrading = ColorGrading.Builder().toneMapper(ToneMapper.Agx()).build(engine)
         camera.setExposure(1f)
@@ -133,7 +140,7 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
         // The prefilter context stays alive: destroying it also tore down our camera's transform
         // (SIGSEGV in Camera.lookAt on the first frame, Filament 1.77.3). It is small and made once.
         iblTools = Triple(ctx, toCube, specular)
-        ibl = IndirectLight.Builder().reflections(reflections).intensity(4.0f).build(engine)
+        ibl = IndirectLight.Builder().reflections(reflections).intensity(2.8f).build(engine)
         scene.indirectLight = ibl
     }
 
@@ -153,6 +160,9 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
             when {
                 mi.name.startsWith("GP5_Head_") -> headLamps += mi
                 mi.name.startsWith("GP5_Tail_") -> tailLamps += mi
+                mi.name == "GP5_Floor" -> floor = mi
+                mi.name in PAINT -> tunePaint(mi)
+                mi.name == "Grey_Plastic1" -> mi.setParameter("roughnessFactor", 0.35f)   // mirror-sharp trim in the export
             }
         }
         applyLamps(0f)
@@ -243,9 +253,9 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
         var moving = false
         // camera: front three-quarter parked -> chase view from behind while driving
         val d0 = drive
-        drive += ((if (s.driving) 1f else 0f) - drive) * (1f - exp(-dt / 0.9f))
+        drive += ((if (s.chase) 1f else 0f) - drive) * (1f - exp(-dt / if (s.chase) 0.9f else 2.2f))
         if (abs(drive - d0) > 1e-4f) moving = true
-        if (yaw.step(dt, s.driving, !s.ambient)) moving = true
+        if (yaw.step(dt, s.chase, !s.ambient)) moving = true
         // wheels roll with the speed
         if (s.speedKmh > 0.1f) {
             wheelAngle = (wheelAngle + s.speedKmh / 3.6f / WHEEL_RADIUS * dt) % (2f * Math.PI.toFloat())
@@ -255,8 +265,7 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
         val l0 = lamps
         lamps += ((if (s.lightsOn) 1f else 0f) - lamps) * (1f - exp(-dt / 0.12f))
         if (abs(lamps - l0) > 1e-3f) { applyLamps(lamps); moving = true }
-        val bloom = lamps > 0.02f
-        if (bloom != view.bloomOptions.enabled) view.bloomOptions = view.bloomOptions.apply { enabled = bloom }
+        if (s.day != floorDay) applyFloor(s.day)
 
         placeCamera()
         spinWheels()
@@ -268,7 +277,8 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
         val dist = lerp(6.4f, 7.4f, drive)
         val h = lerp(1.75f, 2.0f, drive)
         val ex = (sin(r) * dist).toFloat(); val ez = (cos(r) * dist).toFloat()
-        pose = floatArrayOf(yaw.angle, dist, h, TARGET_Y)
+        val p = pose
+        if (p[0] != yaw.angle || p[1] != dist || p[2] != h) pose = floatArrayOf(yaw.angle, dist, h, TARGET_Y)
         camera.lookAt(ex.toDouble(), h.toDouble(), ez.toDouble(), 0.0, TARGET_Y.toDouble(), 0.0, 0.0, 1.0, 0.0)
     }
 
@@ -283,9 +293,36 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
         }
     }
 
+    /**
+     * The baked floor is a dark grey glow with a black shadow, made for the dark stage. By day the glow
+     * is brightened to the light stage colour so only the soft shadow remains.
+     */
+    private fun applyFloor(day: Boolean) {
+        floorDay = day
+        val k = if (day) 8f else 1f
+        floor?.setParameter("baseColorFactor", com.google.android.filament.Colors.RgbaType.LINEAR, k, k, k, 1f)
+    }
+
+    /**
+     * Black paint that reads as a car, not a mirror: the export has a perfectly sharp clearcoat (and a few
+     * panels in a milky grey metal), which turn the studio's area lights into hard white blotches. A
+     * slightly softer clearcoat and one paint for every body panel give smooth, even highlights.
+     */
+    private fun tunePaint(mi: MaterialInstance) {
+        // gltfio ubershader parameters: every lit material has the base / metallic / roughness factors,
+        // only clearcoat variants (GP5_Paint) have the clearcoat ones
+        mi.setParameter("baseColorFactor", com.google.android.filament.Colors.RgbaType.LINEAR, 0.010f, 0.010f, 0.012f, 1f)
+        mi.setParameter("metallicFactor", 0.15f)
+        mi.setParameter("roughnessFactor", 0.42f)
+        if (mi.name == "GP5_Paint") {
+            mi.setParameter("clearCoatFactor", 0.55f)
+            mi.setParameter("clearCoatRoughnessFactor", 0.32f)
+        }
+    }
+
     private fun applyLamps(level: Float) {
-        for (mi in headLamps) mi.setParameter("emissiveFactor", 1.0f * level * 3f, 0.95f * level * 3f, 0.85f * level * 3f)
-        for (mi in tailLamps) mi.setParameter("emissiveFactor", 1.0f * level * 2.5f, 0.04f * level * 2.5f, 0.04f * level * 2.5f)
+        for (mi in headLamps) mi.setParameter("emissiveFactor", 1.0f * level * 2f, 0.95f * level * 2f, 0.85f * level * 2f)
+        for (mi in tailLamps) mi.setParameter("emissiveFactor", 0.9f * level, 0.012f * level, 0.01f * level)
     }
 
     private fun watchBudget(now: Long, animating: Boolean) {

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -63,6 +64,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import javax.inject.Inject
 
 @HiltAndroidApp
@@ -127,13 +129,14 @@ class LauncherViewModel @Inject constructor(
     val vehicle = vehicle.state
     val welcome = com.gp5.launcher.core.data.WelcomeTrigger.pending
     fun welcomeReveal() = headlights.greet()
+    /** The head unit's light signal, for the Auto theme (null when the launcher does not follow one). */
+    val unitLights = headlights.state.map { it.unit }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, null)
     init { sound.warmUp() }
-    /** Chime and spoken greeting, as set in Settings › Display › Welcome. */
+    /** Chime and the recorded "Welcome to Honda Fit", as set in Settings › Display › Welcome. */
+    @Suppress("UNUSED_PARAMETER")
     fun welcomeStart(greeting: String) {
         val s = settings.value
-        val who = s.driverName.takeIf { it != LauncherSettings.DEFAULT_NAME }
-        val line = greeting.trimEnd(',', ' ') + (who?.let { ", $it." } ?: ".")
-        sound.play(music = s.welcomeMusic, line = line.takeIf { s.welcomeVoice })
+        sound.play(music = s.welcomeMusic, speak = s.welcomeVoice, allowed = LauncherSettings.ANNOUNCEMENTS.indices.toSet() - s.announceOff)
     }
     fun welcomeSkip() = sound.fadeOut()
     fun welcomeDone() = com.gp5.launcher.core.data.WelcomeTrigger.done()
@@ -157,13 +160,31 @@ fun LauncherRoot(homePresses: SharedFlow<Unit>, vm: LauncherViewModel = hiltView
     BackHandler(enabled = dest != Destination.Home) { dest = Destination.Home }
     LaunchedEffect(homePresses) { homePresses.collect { dest = Destination.Home } }
 
+    // Day / night theme. Auto follows the headlights (night mode or the learned signal); without
+    // a signal, the clock. A change from the lights waits 3 s so a flicker does not swap the theme.
+    val unitLights by vm.unitLights.collectAsStateWithLifecycle()
+    val hour by androidx.compose.runtime.produceState(java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) {
+        while (true) { kotlinx.coroutines.delay(60_000); value = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY) }
+    }
+    val wantNight = when (settings.theme) {
+        com.gp5.launcher.core.model.ThemeMode.Day -> false
+        com.gp5.launcher.core.model.ThemeMode.Night -> true
+        com.gp5.launcher.core.model.ThemeMode.Auto -> unitLights ?: (hour >= 18 || hour < 6)
+    }
+    var night by remember { mutableStateOf(wantNight) }
+    LaunchedEffect(wantNight, loaded) {
+        if (wantNight != night) {
+            if (loaded && settings.theme == com.gp5.launcher.core.model.ThemeMode.Auto) kotlinx.coroutines.delay(3_000)
+            night = wantNight
+        }
+    }
     val look = Gp5Look(
         accent = Color(settings.accentArgb),
         goldTrim = settings.goldTrim,
         ambient = !car.isDriving && !settings.calmMotion,
         economy = settings.economyUnit,
     )
-    Gp5Theme(look) {
+    Gp5Theme(look, night = night) {
       Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize().background(Gp5Palette.Bg)) {
             val rail = @Composable { Rail(selected = dest, onSelect = { dest = it }, side = settings.railSide) }

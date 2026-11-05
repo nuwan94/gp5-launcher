@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -83,6 +84,7 @@ class SettingsViewModel @Inject constructor(
     private val lights: HeadlightRepository,
     private val media: com.gp5.launcher.media.MediaRepository,
     private val apps: com.gp5.launcher.core.data.AppsRepository,
+    private val audio: com.gp5.launcher.core.data.WelcomeAudio,
 ) : ViewModel() {
     val vehicle = vehicle.state
     fun obdEnabled(on: Boolean) = viewModelScope.launch { repo.setObdEnabled(on) }
@@ -93,6 +95,7 @@ class SettingsViewModel @Inject constructor(
     fun gold(on: Boolean) = viewModelScope.launch { repo.setGoldTrim(on) }
     fun calm(on: Boolean) = viewModelScope.launch { repo.setCalmMotion(on) }
     fun carRenderer(r: CarRenderer) = viewModelScope.launch { repo.setCarRenderer(r) }
+    fun theme(t: com.gp5.launcher.core.model.ThemeMode) = viewModelScope.launch { repo.setTheme(t) }
     val activeRenderer = LiveHealth.active
     fun navApp(a: NavApp) = viewModelScope.launch { repo.setNavApp(a) }
     fun homePlace(p: String) = viewModelScope.launch { repo.setHomePlace(p) }
@@ -136,6 +139,10 @@ class SettingsViewModel @Inject constructor(
     fun driverName(n: String) = viewModelScope.launch { repo.setDriverName(n) }
     fun welcomeVoice(on: Boolean) = viewModelScope.launch { repo.setWelcomeVoice(on) }
     fun welcomeMusic(on: Boolean) = viewModelScope.launch { repo.setWelcomeMusic(on) }
+    fun announcement(i: Int, on: Boolean) = viewModelScope.launch { repo.setAnnouncement(i, on) }
+    val previewing = audio.previewing
+    fun previewAnnouncement(i: Int) = audio.preview(i)
+    override fun onCleared() { audio.stopPreview() }
     fun playWelcome() = com.gp5.launcher.core.data.WelcomeTrigger.fire()
 
     private val _message = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
@@ -260,7 +267,7 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
 
 private fun summary(p: Page, s: LauncherSettings, car: VehicleState, mediaAccess: Boolean, version: String): Pair<String, Color?> = when (p) {
     Page.Obd -> if (!s.obdEnabled) "Off · speed from GPS" to null else linkTitle(car) to (if (car.connected) Gp5Palette.Ev else null)
-    Page.Display -> "${LauncherSettings.ACCENTS.firstOrNull { it.first == s.accentArgb }?.second ?: "Custom"} · rail ${s.railSide.name.lowercase()}" to null
+    Page.Display -> "${s.theme.name} theme · ${LauncherSettings.ACCENTS.firstOrNull { it.first == s.accentArgb }?.second ?: "Custom"} · rail ${s.railSide.name.lowercase()}" to null
     Page.Units -> "km/h · °C · ${s.economyUnit.label}" to null
     Page.Navigation -> (listOfNotNull(s.homePlace.takeIf { it.isNotBlank() }?.let { "Home" }, s.workPlace.takeIf { it.isNotBlank() }?.let { "Work" })
         .joinToString(" + ").ifEmpty { "No places set" } + " · " + when (s.navApp) { NavApp.Auto -> "Auto"; NavApp.GoogleMaps -> "Maps"; NavApp.Waze -> "Waze" }) to null
@@ -338,6 +345,9 @@ private fun ObdPage(vm: SettingsViewModel, s: LauncherSettings, car: VehicleStat
 private fun DisplayPage(vm: SettingsViewModel, s: LauncherSettings) {
     Spacer(Modifier.height(8.dp))
     Group {
+        SettingRow("Theme", "Auto: light by day, dark once the headlights are on (after 6 pm without a light signal)") {
+            Segmented(listOf("Auto", "Day", "Night"), s.theme.ordinal) { vm.theme(com.gp5.launcher.core.model.ThemeMode.entries[it]) }
+        }
         SettingRow("Accent colour", "Rail, gauges, buttons and highlights") {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 LauncherSettings.ACCENTS.forEach { (argb, name) ->
@@ -367,7 +377,7 @@ private fun DisplayPage(vm: SettingsViewModel, s: LauncherSettings) {
         SettingRow("Your name", "Shown as \"Good morning, ${s.driverName}\"") {
             TextSetting(if (s.driverName == LauncherSettings.DEFAULT_NAME) "" else s.driverName, LauncherSettings.DEFAULT_NAME, { it.take(24) }) { vm.driverName(it) }
         }
-        SettingRow("Spoken greeting", "Says \"Good morning, <name>\" through the head unit's text-to-speech") {
+        SettingRow("Cabin announcement", "A \"welcome aboard\" announcement, picked at random from the ones ticked below") {
             Toggle(s.welcomeVoice) { vm.welcomeVoice(it) }
         }
         SettingRow("Welcome music", "A short chime; music from your phone dips under it") {
@@ -376,6 +386,20 @@ private fun DisplayPage(vm: SettingsViewModel, s: LauncherSettings) {
         SettingRow("Preview", "Play the welcome now") {
             ActionPill("Play", LocalGp5Look.current.accent) { vm.playWelcome() }
         }
+    }
+    Section("Announcements", "Ticked ones play at random; each starts with \"Good morning\" or \"Good afternoon\" by the time of day")
+    val previewing by vm.previewing.collectAsStateWithLifecycle()
+    Group {
+        LauncherSettings.ANNOUNCEMENTS.forEachIndexed { i, (name, line) ->
+            val on = i !in s.announceOff
+            AnnouncementRow(
+                name, line, checked = on, enabled = s.welcomeVoice, playing = previewing == i,
+                onCheck = { vm.announcement(i, it) }, onPlay = { vm.previewAnnouncement(i) },
+            )
+        }
+    }
+    if (s.welcomeVoice && LauncherSettings.ANNOUNCEMENTS.indices.all { it in s.announceOff }) {
+        Text("None ticked: the welcome plays without an announcement.", style = Gp5Type.Caption, modifier = Modifier.padding(top = 8.dp, start = 4.dp))
     }
     Section("Headlights", "Light up the car's lamps when your headlights are on, without OBD")
     val lightsNow by vm.headlights.collectAsStateWithLifecycle()
@@ -662,6 +686,35 @@ private fun TextSetting(value: String, placeholder: String, filter: (String) -> 
 }
 
 /** 56 x 32 toggle with a spring thumb (settings.html .tgl). */
+/** One cabin announcement: tick to include it in the random pick, play to hear it. */
+@Composable
+private fun AnnouncementRow(name: String, line: String, checked: Boolean, enabled: Boolean, playing: Boolean, onCheck: (Boolean) -> Unit, onPlay: () -> Unit) {
+    val accent = LocalGp5Look.current.accent
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 64.dp).clickable { onCheck(!checked) }.padding(horizontal = 14.dp, vertical = 8.dp)
+            .graphicsLayer { alpha = if (enabled) 1f else 0.5f },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(26.dp).clip(RoundedCornerShape(6.dp))
+                .background(if (checked) accent else Color.Transparent)
+                .border(2.dp, if (checked) accent else Gp5Palette.LineStrong, RoundedCornerShape(6.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (checked) androidx.compose.foundation.Canvas(Modifier.size(14.dp)) {
+                val w = size.width
+                drawLine(Color.White, androidx.compose.ui.geometry.Offset(w * 0.1f, w * 0.55f), androidx.compose.ui.geometry.Offset(w * 0.4f, w * 0.85f), strokeWidth = 2.6f * density, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(Color.White, androidx.compose.ui.geometry.Offset(w * 0.4f, w * 0.85f), androidx.compose.ui.geometry.Offset(w * 0.92f, w * 0.15f), strokeWidth = 2.6f * density, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            }
+        }
+        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+            Text(name, style = Gp5Type.Body, color = Gp5Palette.Text)
+            Text(line, style = Gp5Type.Caption, maxLines = 2)
+        }
+        ActionPill(if (playing) "Stop" else "Play", accent, onPlay)
+    }
+}
+
 @Composable
 private fun Toggle(on: Boolean, onChange: (Boolean) -> Unit) {
     val accent = LocalGp5Look.current.accent

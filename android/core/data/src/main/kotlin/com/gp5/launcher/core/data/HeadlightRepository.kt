@@ -21,7 +21,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** Headlights as the launcher sees them. [fromUnit] is false when the state is the manual toggle. */
-data class Headlights(val on: Boolean, val fromUnit: Boolean, val source: String)
+data class Headlights(
+    val on: Boolean, val fromUnit: Boolean, val source: String,
+    /** What the head unit's light signal says, ignoring the welcome flash (null: not followed). For the Auto theme. */
+    val unit: Boolean? = null,
+)
 
 /** A setting that changed between the lights-off and lights-on snapshots. */
 data class LightCandidate(val table: String, val key: String, val off: String?, val on: String?) {
@@ -77,10 +81,10 @@ class HeadlightRepository @Inject constructor(
         val unit = if (p.lightsFromUnit) read(p.lightSignal) else null
         if (unit != lastSignal) { lastSignal = unit; manual = null }   // the unit changed: follow it again
         val m = manual
-        if (android.os.SystemClock.elapsedRealtime() < greetUntil) { _state.value = _state.value.copy(on = true); return }
+        if (android.os.SystemClock.elapsedRealtime() < greetUntil) { _state.value = _state.value.copy(on = true, unit = unit); return }
         _state.value = when {
-            m != null -> Headlights(m, fromUnit = false, source = "Manual")
-            unit != null -> Headlights(unit, fromUnit = true, source = describe(p.lightSignal))
+            m != null -> Headlights(m, fromUnit = false, source = "Manual", unit = unit)
+            unit != null -> Headlights(unit, fromUnit = true, source = describe(p.lightSignal), unit = unit)
             else -> Headlights(false, fromUnit = false, source = "Manual")
         }
     }

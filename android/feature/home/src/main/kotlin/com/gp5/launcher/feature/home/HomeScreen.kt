@@ -134,10 +134,9 @@ fun HomeScreen(onOpenApps: () -> Unit, onOpenSettings: () -> Unit = {}, vm: Home
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(g)) {
         Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(g)) {
             CarStage(
-                scene = CarScene(speedKmh = car.speedKmh, lightsOn = lights.on, ambient = !settings.calmMotion, connected = car.hasSpeed),
+                scene = CarScene(speedKmh = car.speedKmh, lightsOn = lights.on, ambient = !settings.calmMotion, connected = car.hasSpeed, day = Gp5Palette.isDay),
                 renderer = settings.carRenderer,
                 car = car,
-                onLights = vm::toggleLights,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
             )
             Column(Modifier.width(Gp5Dimens.RightCol).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(g)) {
@@ -181,7 +180,7 @@ fun HomeScreen(onOpenApps: () -> Unit, onOpenSettings: () -> Unit = {}, vm: Home
 }
 
 @Composable
-private fun CarStage(scene: CarScene, renderer: com.gp5.launcher.core.model.CarRenderer, car: VehicleState, onLights: () -> Unit, modifier: Modifier) {
+private fun CarStage(scene: CarScene, renderer: com.gp5.launcher.core.model.CarRenderer, car: VehicleState, modifier: Modifier) {
     val shown by animateFloatAsState(car.speedKmh, tween(Gp5Motion.Base), label = "speed")
     val look = LocalGp5Look.current
     GpCard(modifier) {
@@ -211,18 +210,6 @@ private fun CarStage(scene: CarScene, renderer: com.gp5.launcher.core.model.CarR
             if (soc != null) Meter("Battery", soc, Gp5Palette.Ev, Modifier.weight(1f))
             if (fuel != null) Meter("Fuel", fuel, Gp5Palette.Text2, Modifier.weight(1f))
             if (soc == null && fuel == null) Spacer(Modifier.weight(1f))
-            Box(
-                Modifier.size(40.dp).clip(CircleShape)
-                    .background(if (scene.lightsOn) look.accentSoft else Gp5Palette.Surface2)
-                    .clickable(onClick = onLights),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painterResource(R.drawable.ic_headlight), "Headlights",
-                    tint = if (scene.lightsOn) look.accent else Gp5Palette.Text2,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
         }
     }
 }

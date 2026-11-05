@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import com.gp5.launcher.core.design.Gp5Palette
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlin.math.abs
@@ -45,20 +46,22 @@ internal class RoadCam(
 @Composable
 internal fun RoadLayer(scene: CarScene, camera: DrawScope.() -> RoadCam, modifier: Modifier = Modifier) {
     val s by rememberUpdatedState(scene)
-    var show by remember { mutableFloatStateOf(if (scene.driving) 1f else 0f) }
+    var show by remember { mutableFloatStateOf(if (scene.chase) 1f else 0f) }
     var travel by remember { mutableFloatStateOf(0f) }
+    var distance by remember { mutableFloatStateOf(0f) }   // for the scenery pattern
     var frame by remember { mutableIntStateOf(0) }       // redraws for camera moves
     LaunchedEffect(Unit) {
         while (isActive) {
-            snapshotFlow { s.driving }.first { it }        // sleep while parked
+            snapshotFlow { s.chase }.first { it }          // sleep while parked
             var last = 0L
-            while (isActive && (s.driving || show > 0f)) {
+            while (isActive && (s.chase || show > 0f)) {
                 withFrameNanos { now ->
                     val dt = if (last == 0L) 0f else ((now - last) / 1e9f).coerceAtMost(0.1f)
                     last = now
-                    val goal = if (s.driving) 1f else 0f
+                    val goal = if (s.chase) 1f else 0f
                     show = (show + (goal - show) * (1f - exp(-dt / 0.45f))).let { if (abs(it - goal) < 0.01f) goal else it }
                     travel = (travel + s.speedKmh / 3.6f * dt) % DASH_PERIOD
+                    distance = (distance + s.speedKmh / 3.6f * dt) % 70_000f
                     frame++
                 }
             }
@@ -66,7 +69,11 @@ internal fun RoadLayer(scene: CarScene, camera: DrawScope.() -> RoadCam, modifie
     }
     Canvas(modifier.fillMaxSize()) {
         frame
-        if (show > 0f) drawRoad(camera(), travel, show)
+        if (show > 0f) {
+            val c = camera()
+            drawRoad(c, travel, show)
+            drawScenery(Projector(c), distance, show)
+        }
     }
 }
 
@@ -79,8 +86,6 @@ private const val LINE_W = 0.13f
 private const val NEAR = -14f
 private const val FAR = 70f
 
-private val Asphalt = Color(0xFF242424)
-private val Paint = Color(0xFFD8D8D8)
 
 /** 1 near the car, 0 far away (and a little behind). */
 private fun fade(z: Float): Float = when {
@@ -89,6 +94,8 @@ private fun fade(z: Float): Float = when {
 }
 
 private fun DrawScope.drawRoad(c: RoadCam, travel: Float, show: Float) {
+    val Asphalt = Gp5Palette.Road
+    val Paint = Gp5Palette.RoadPaint
     val r = Math.toRadians(c.yawDeg.toDouble())
     val ex = (sin(r) * c.dist).toFloat(); val ey = c.height; val ez = (cos(r) * c.dist).toFloat()
     // camera basis (as Filament's lookAt: right = forward x up)
@@ -131,7 +138,7 @@ private fun DrawScope.drawRoad(c: RoadCam, travel: Float, show: Float) {
         val horizon = (proj(0f, FAR) ?: left.last()).y
         val nearY = (proj(0f, 0f) ?: left.first()).y
         drawPath(p, Brush.verticalGradient(
-            0f to Color.Transparent, 0.35f to Asphalt.copy(alpha = 0.55f * show), 1f to Asphalt.copy(alpha = 0.9f * show),
+            0f to Asphalt.copy(alpha = 0f), 0.35f to Asphalt.copy(alpha = 0.55f * show), 1f to Asphalt.copy(alpha = 0.9f * show),
             startY = horizon, endY = nearY + (nearY - horizon) * 0.4f,
         ))
     }

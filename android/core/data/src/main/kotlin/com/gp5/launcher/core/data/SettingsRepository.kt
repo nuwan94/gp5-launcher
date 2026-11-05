@@ -52,6 +52,7 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
         val Gold = booleanPreferencesKey("gold")
         val Calm = booleanPreferencesKey("calm")
         val CarRenderer = stringPreferencesKey("carRenderer")
+        val Theme = stringPreferencesKey("theme")
         val ObdEnabled = booleanPreferencesKey("obdEnabled")
         val ObdAddress = stringPreferencesKey("obdAddress")
         val NavApp = stringPreferencesKey("navApp")
@@ -69,6 +70,7 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
         val DriverName = stringPreferencesKey("driverName")
         val WelcomeVoice = booleanPreferencesKey("welcomeVoice")
         val WelcomeMusic = booleanPreferencesKey("welcomeMusic")
+        val AnnounceOff = androidx.datastore.preferences.core.stringSetPreferencesKey("announceOff")
     }
 
     val settings: Flow<LauncherSettings> = store.data.map { p ->
@@ -78,6 +80,7 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
             goldTrim = p[Keys.Gold] ?: true,
             calmMotion = p[Keys.Calm] ?: false,
             carRenderer = CarRenderer.entries.firstOrNull { it.name == p[Keys.CarRenderer] } ?: CarRenderer.Auto,
+            theme = com.gp5.launcher.core.model.ThemeMode.entries.firstOrNull { it.name == p[Keys.Theme] } ?: com.gp5.launcher.core.model.ThemeMode.Auto,
             obdEnabled = p[Keys.ObdEnabled] ?: true,
             obdAddress = p[Keys.ObdAddress] ?: "192.168.0.10:35000",
             navApp = NavApp.entries.firstOrNull { it.name == p[Keys.NavApp] } ?: NavApp.Auto,
@@ -95,6 +98,7 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
             driverName = p[Keys.DriverName]?.takeIf { it.isNotBlank() } ?: LauncherSettings.DEFAULT_NAME,
             welcomeVoice = p[Keys.WelcomeVoice] ?: true,
             welcomeMusic = p[Keys.WelcomeMusic] ?: true,
+            announceOff = p[Keys.AnnounceOff]?.mapNotNull { it.toIntOrNull() }?.toSet() ?: emptySet(),
         )
     }
 
@@ -109,6 +113,9 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
     }
     suspend fun setCalmMotion(on: Boolean) {
         store.edit { it[Keys.Calm] = on }
+    }
+    suspend fun setTheme(t: com.gp5.launcher.core.model.ThemeMode) {
+        store.edit { it[Keys.Theme] = t.name }
     }
     suspend fun setCarRenderer(r: CarRenderer) {
         store.edit { it[Keys.CarRenderer] = r.name }
@@ -161,6 +168,9 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
     }
     suspend fun setWelcomeVoice(on: Boolean) {
         store.edit { it[Keys.WelcomeVoice] = on }
+    }
+    suspend fun setAnnouncement(index: Int, on: Boolean) {
+        store.edit { val off = it[Keys.AnnounceOff].orEmpty(); it[Keys.AnnounceOff] = if (on) off - index.toString() else off + index.toString() }
     }
     suspend fun setWelcomeMusic(on: Boolean) {
         store.edit { it[Keys.WelcomeMusic] = on }
