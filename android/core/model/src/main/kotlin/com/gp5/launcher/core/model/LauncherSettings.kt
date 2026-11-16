@@ -20,6 +20,9 @@ enum class EconomyUnit(val label: String) {
 /** Which maps app the Home and Work buttons open. Auto: Google Maps, else Waze, else any geo app. */
 enum class NavApp { Auto, GoogleMaps, Waze }
 
+/** The equalizer animation behind now playing in the dock. */
+enum class VisualizerStyle(val label: String) { Off("Off"), Bars("Bars"), Wave("Wave"), Mirror("Mirror"), Dots("Dots") }
+
 /** User settings that shape the whole UI (Settings > Display). Persisted in DataStore. */
 data class LauncherSettings(
     val accentArgb: Long = ACCENT_RS_RED,
@@ -28,6 +31,9 @@ data class LauncherSettings(
     val calmMotion: Boolean = false,
     val carRenderer: CarRenderer = CarRenderer.Auto,
     val theme: ThemeMode = ThemeMode.Auto,
+    /** Equalizer style, and whether it follows the sound playing (needs the microphone permission). */
+    val visualizer: VisualizerStyle = VisualizerStyle.Bars,
+    val visualizerLive: Boolean = false,
     /** OBD adapter (ELM327 Wi-Fi). */
     val obdEnabled: Boolean = true,
     val obdAddress: String = "192.168.0.10:35000",

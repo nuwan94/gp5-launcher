@@ -53,6 +53,8 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
         val Calm = booleanPreferencesKey("calm")
         val CarRenderer = stringPreferencesKey("carRenderer")
         val Theme = stringPreferencesKey("theme")
+        val Visualizer = stringPreferencesKey("visualizer")
+        val VisualizerLive = booleanPreferencesKey("visualizerLive")
         val ObdEnabled = booleanPreferencesKey("obdEnabled")
         val ObdAddress = stringPreferencesKey("obdAddress")
         val NavApp = stringPreferencesKey("navApp")
@@ -81,6 +83,8 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
             calmMotion = p[Keys.Calm] ?: false,
             carRenderer = CarRenderer.entries.firstOrNull { it.name == p[Keys.CarRenderer] } ?: CarRenderer.Auto,
             theme = com.gp5.launcher.core.model.ThemeMode.entries.firstOrNull { it.name == p[Keys.Theme] } ?: com.gp5.launcher.core.model.ThemeMode.Auto,
+            visualizer = com.gp5.launcher.core.model.VisualizerStyle.entries.firstOrNull { it.name == p[Keys.Visualizer] } ?: com.gp5.launcher.core.model.VisualizerStyle.Bars,
+            visualizerLive = p[Keys.VisualizerLive] ?: false,
             obdEnabled = p[Keys.ObdEnabled] ?: true,
             obdAddress = p[Keys.ObdAddress] ?: "192.168.0.10:35000",
             navApp = NavApp.entries.firstOrNull { it.name == p[Keys.NavApp] } ?: NavApp.Auto,
@@ -113,6 +117,12 @@ class SettingsRepository @Inject constructor(private val store: DataStore<Prefer
     }
     suspend fun setCalmMotion(on: Boolean) {
         store.edit { it[Keys.Calm] = on }
+    }
+    suspend fun setVisualizer(v: com.gp5.launcher.core.model.VisualizerStyle) {
+        store.edit { it[Keys.Visualizer] = v.name }
+    }
+    suspend fun setVisualizerLive(on: Boolean) {
+        store.edit { it[Keys.VisualizerLive] = on }
     }
     suspend fun setTheme(t: com.gp5.launcher.core.model.ThemeMode) {
         store.edit { it[Keys.Theme] = t.name }

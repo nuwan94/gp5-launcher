@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.scale
 import com.gp5.launcher.core.design.Gp5Palette
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -153,10 +154,37 @@ internal fun BackdropLayer(camera: DrawScope.() -> RoadCam, modifier: Modifier =
         val back = p.proj(0f, 0.9f, -2f) ?: c
         val r = maxOf(hypot(front.x - back.x, front.y - back.y), size.minDimension * 0.5f) * 1.05f
         val centre = Offset(c.x, c.y - r * 0.12f)
-        drawCircle(Brush.radialGradient(
-            0f to Spot.copy(alpha = 0.95f * n), 0.45f to Spot.copy(alpha = 0.45f * n), 1f to Spot.copy(alpha = 0f),
-            center = centre, radius = r,
-        ), r, centre)
+        // an ellipse that fades out before every edge of the stage, so no edge of it is ever cut off
+        val rx = minOf(r, centre.x, size.width - centre.x).coerceAtLeast(1f)
+        val ry = minOf(r, centre.y, size.height - centre.y).coerceAtLeast(1f)
+        scale(1f, ry / rx, centre) {
+            drawCircle(Brush.radialGradient(
+                0f to Spot.copy(alpha = 0.8f * n), 0.45f to Spot.copy(alpha = 0.35f * n), 1f to Spot.copy(alpha = 0f),
+                center = centre, radius = rx,
+            ), rx, centre)
+        }
+    }
+}
+
+/**
+ * A soft contact shadow under the car, on the page itself (the 3D floor plane is hidden). Follows the
+ * car's footprint as the camera swings round; fades as the road appears.
+ */
+@Composable
+internal fun ShadowLayer(camera: DrawScope.() -> RoadCam, modifier: Modifier = Modifier) {
+    Canvas(modifier.fillMaxSize()) {
+        val p = Projector(camera())
+        val corners = listOf(-1.05f to -2.3f, 1.05f to -2.3f, 1.05f to 2.3f, -1.05f to 2.3f).mapNotNull { (x, z) -> p.proj(x, 0f, z) }
+        if (corners.size < 4) return@Canvas
+        val l = corners.minOf { it.x }; val rr = corners.maxOf { it.x }
+        val t = corners.minOf { it.y }; val b = corners.maxOf { it.y }
+        val w = (rr - l) / 2f; val h = ((b - t) / 2f).coerceAtLeast(w * 0.06f)
+        if (w < 1f) return@Canvas
+        val centre = Offset((l + rr) / 2f, (t + b) / 2f)
+        val ink = Color.Black.copy(alpha = if (Gp5Palette.isDay) 0.30f else 0.55f)
+        scale(1f, h / w, centre) {
+            drawCircle(Brush.radialGradient(0f to ink, 0.55f to ink.copy(alpha = ink.alpha * 0.55f), 1f to ink.copy(alpha = 0f), center = centre, radius = w * 1.05f), w * 1.05f, centre)
+        }
     }
 }
 

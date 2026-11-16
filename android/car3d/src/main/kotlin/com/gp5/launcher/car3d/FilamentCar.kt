@@ -89,7 +89,7 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
     private var drive = 0f                 // 0 parked camera .. 1 chase camera
     /** Camera now: yaw, distance, height, target height (for the road layer). */
     /** Snapshot state (written on the main thread), so the road and beam layers redraw as the camera moves. */
-    var pose by androidx.compose.runtime.mutableStateOf(floatArrayOf(CarCamera.HERO_YAW, 6.4f, 1.75f, TARGET_Y)); private set
+    var pose by androidx.compose.runtime.mutableStateOf(floatArrayOf(CarCamera.HERO_YAW, 7.2f, 1.75f, TARGET_Y)); private set
     private var lamps = 0f                 // 0 off .. 1 on
     private var wheelAngle = 0f
     private var lastFrameNs = 0L
@@ -165,6 +165,7 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
                 mi.name == "Grey_Plastic1" -> mi.setParameter("roughnessFactor", 0.35f)   // mirror-sharp trim in the export
             }
         }
+        hideFloor(a)
         applyLamps(0f)
         Log.i(TAG, "car: ${a.entities.size} entities, ${wheels.size} wheels, ${headLamps.size} head / ${tailLamps.size} tail lamp materials")
     }
@@ -274,7 +275,7 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
 
     private fun placeCamera() {
         val r = Math.toRadians(yaw.angle.toDouble())
-        val dist = lerp(6.4f, 7.4f, drive)
+        val dist = lerp(7.2f, 7.4f, drive)
         val h = lerp(1.75f, 2.0f, drive)
         val ex = (sin(r) * dist).toFloat(); val ez = (cos(r) * dist).toFloat()
         val p = pose
@@ -290,6 +291,21 @@ class FilamentCar private constructor(private val app: Context) : Choreographer.
         for ((e, base) in wheels) {
             Matrix.multiplyMM(out, 0, base, 0, rot, 0)
             tm.setTransform(tm.getInstance(e), out)
+        }
+    }
+
+    /**
+     * The baked floor plane never matches the page colour exactly (it is lit by the studio light), so it
+     * showed as a lighter or darker box behind the parked car. It is left out; the stage draws a soft
+     * shadow under the car instead (ShadowLayer).
+     */
+    private fun hideFloor(a: com.google.android.filament.gltfio.FilamentAsset) {
+        val rm = engine.renderableManager
+        for (e in a.entities) {
+            if (!rm.hasComponent(e)) continue
+            val r = rm.getInstance(e)
+            val isFloor = (0 until rm.getPrimitiveCount(r)).any { rm.getMaterialInstanceAt(r, it).name == "GP5_Floor" }
+            if (isFloor) scene.remove(e)
         }
     }
 

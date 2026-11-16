@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- GP5 Link: the phone app connects over Bluetooth (RFCOMM) with navigation and weather -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Equalizer: reads the sound playing (output mix) as frequency bands; nothing is recorded -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
     <application>
         <!-- Notification access lets the launcher read other apps' media sessions (now playing). -->
         <service

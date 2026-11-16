@@ -110,6 +110,8 @@ class SessionMediaRepository @Inject constructor(
         override fun onPlaybackStateChanged(state: PlaybackState?) = publish()
         override fun onMetadataChanged(metadata: MediaMetadata?) = publish()
         override fun onSessionDestroyed() = refresh()
+        override fun onQueueChanged(queue: MutableList<android.media.session.MediaSession.QueueItem>?) = publish()
+        override fun onExtrasChanged(extras: android.os.Bundle?) = publish()
     }
 
     private val sessionsChanged = MediaSessionManager.OnActiveSessionsChangedListener { list -> active = list.orEmpty(); rewatch() }
@@ -118,6 +120,19 @@ class SessionMediaRepository @Inject constructor(
         MediaListenerService.listener = this
         main.post { refresh() }
         listenForBroadcasts()
+        main.post { main.postDelayed(watchdog, WATCHDOG_MS) }   // after construction (watchdog is declared below)
+    }
+
+    /**
+     * Safety net: some Bluetooth music apps change track or state without telling their session's
+     * callbacks, and the system can drop the listener binding. Every few seconds, re-read the
+     * sessions (cheap) so Home never needs a screen change to catch up.
+     */
+    private val watchdog = object : Runnable {
+        override fun run() {
+            if (hasAccess()) refresh()
+            main.postDelayed(this, WATCHDOG_MS)
+        }
     }
 
     /** Players and some Bluetooth apps announce tracks with these (Android's old music app convention). */
@@ -410,6 +425,7 @@ class SessionMediaRepository @Inject constructor(
     }
 
     companion object {
+        const val WATCHDOG_MS = 3_000L
         private const val TAG = "Media"
         /** Head-unit Bluetooth apps: com.syu.bt, com.microntek.bluetooth, com.fyt.btmusic, com.android.bluetooth ... */
         private val BT_PACKAGE = Regex("""(^|\.)(bt|bluetooth|btmusic|a2dp|bluemusic)(\.|$)|bluetooth|btmusic""", RegexOption.IGNORE_CASE)

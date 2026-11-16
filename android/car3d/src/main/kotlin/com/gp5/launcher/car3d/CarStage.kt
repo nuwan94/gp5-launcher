@@ -125,6 +125,7 @@ private fun LiveCar(scene: CarScene, modifier: Modifier, onFailure: (String) -> 
         // the beams in the air when they come towards the camera
         BackdropLayer(camera = cam)
         RoadLayer(scene, camera = cam)
+        ShadowLayer(camera = cam)
         BeamLayer(scene, camera = cam, front = false)
         AndroidView(
             factory = { ctx -> TextureView(ctx).also { car.attach(it) } },

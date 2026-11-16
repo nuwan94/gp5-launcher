@@ -21,7 +21,7 @@ class Gp5Colors(
     companion object {
         val Night = Gp5Colors(
             bg = Color(0xFF121212), rail = Color(0xFF0C0C0C), surface1 = Color(0xFF1A1A1A), surface2 = Color(0xFF232323),
-            stage = Color(0xFF151515), line = Color(0xFF2A2A2A), lineStrong = Color(0xFF3A3A3A),
+            stage = Color(0xFF121212), line = Color(0xFF2A2A2A), lineStrong = Color(0xFF3A3A3A),
             text = Color(0xFFF2F0EA), text2 = Color(0xFFA8A69E), text3 = Color(0xFF6E6C66),
             ev = Color(0xFF8FD14F), regen = Color(0xFF4EA8F2), warn = Color(0xFFEF9F27),
             // gold trim (design/gold.css), matching the car's gold Honda emblems
@@ -31,7 +31,7 @@ class Gp5Colors(
         /** Warm paper-white (not pure white: less glare), darker accents and antique gold so they read in sunlight. */
         val Day = Gp5Colors(
             bg = Color(0xFFECEAE4), rail = Color(0xFFE1DED6), surface1 = Color(0xFFFAF9F6), surface2 = Color(0xFFEFEDE8),
-            stage = Color(0xFFE4E1D9), line = Color(0xFFD6D2C8), lineStrong = Color(0xFFC3BFB5),
+            stage = Color(0xFFECEAE4), line = Color(0xFFD6D2C8), lineStrong = Color(0xFFC3BFB5),
             text = Color(0xFF1A1A18), text2 = Color(0xFF55534D), text3 = Color(0xFF8A877F),
             ev = Color(0xFF3E8E1F), regen = Color(0xFF1F6FB8), warn = Color(0xFFB86E0A),
             goldDim = Color(0x99B08A2E), goldMid = Color(0xCC9C7A24), goldHi = Color(0xFFC9A24A),

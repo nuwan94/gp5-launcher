@@ -24,7 +24,7 @@ data class CarScene(
 
 internal object CarCamera {
     /** Yaw convention shared with the Blender turntable: 0 = straight ahead of the car, 90 = its left side. */
-    const val HERO_YAW = 35f          // parked hero pose, front three-quarter
+    const val HERO_YAW = 280f         // parked: side-on from the right, front pointing right, a touch of the nose
     const val CHASE_YAW = 170f        // driving, from behind (slightly off-centre, on a turntable frame)
     const val TURNTABLE_FRAMES = 72
 }

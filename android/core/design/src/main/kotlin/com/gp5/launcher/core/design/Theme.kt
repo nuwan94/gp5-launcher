@@ -11,6 +11,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -60,13 +62,17 @@ fun systemAnimationsOff(): Boolean {
 @Composable
 fun Gp5Theme(look: Gp5Look = Gp5Look(), night: Boolean = true, content: @Composable () -> Unit) {
     val reduced = systemAnimationsOff()
-    // day / night: set at once on start, then a 600 ms cross-fade of every colour
+    // day / night: the colours switch in one frame (no app-wide recomposition per animation frame,
+    // which stutters on head units), and a veil in the old background colour fades off on top
     remember { Gp5Palette.night = if (night) 1f else 0f }
+    val veil = remember { androidx.compose.animation.core.Animatable(0f) }
+    var veilColor by remember { androidx.compose.runtime.mutableStateOf(Color.Transparent) }
     LaunchedEffect(night) {
         val to = if (night) 1f else 0f
         if (Gp5Palette.night != to) {
-            if (reduced) Gp5Palette.night = to
-            else animate(Gp5Palette.night, to, animationSpec = tween(600, easing = Gp5Motion.EaseOut)) { v, _ -> Gp5Palette.night = v }
+            veilColor = Gp5Palette.Bg
+            Gp5Palette.night = to
+            if (!reduced) { veil.snapTo(0.85f); veil.animateTo(0f, tween(500, easing = Gp5Motion.EaseOut)) }
         }
     }
     // the accent a shade darker in daylight so it holds its contrast on the light surfaces
@@ -83,6 +89,13 @@ fun Gp5Theme(look: Gp5Look = Gp5Look(), night: Boolean = true, content: @Composa
         outline = Gp5Palette.Line,
     )
     CompositionLocalProvider(LocalGp5Look provides look.copy(accent = accent, ambient = look.ambient && !reduced)) {
-        MaterialTheme(colorScheme = scheme, content = content)
+        MaterialTheme(colorScheme = scheme) {
+            androidx.compose.foundation.layout.Box {
+                content()
+                if (veil.value > 0f) androidx.compose.foundation.Canvas(androidx.compose.ui.Modifier.matchParentSize()) {
+                    drawRect(veilColor.copy(alpha = veil.value))
+                }
+            }
+        }
     }
 }

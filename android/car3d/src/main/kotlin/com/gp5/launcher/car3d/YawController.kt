@@ -4,8 +4,8 @@ import kotlin.math.abs
 import kotlin.math.exp
 
 /**
- * Camera yaw for both car views. Not touchable: parked it rests on the front three-quarter
- * ([CarCamera.HERO_YAW]); driving it swings round the car's left side to the chase view from behind
+ * Camera yaw for both car views. Not touchable: parked it rests side-on
+ * ([CarCamera.HERO_YAW]); driving it swings round the back to the chase view from behind
  * ([CarCamera.CHASE_YAW]) in about 2 s, and back slowly (about 6 s) once the car has stopped.
  * [calm] snaps instead of swinging.
  * [angle] is 0..360.

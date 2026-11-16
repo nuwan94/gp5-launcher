@@ -53,12 +53,16 @@ class HeadlightRepository @Inject constructor(
     private var manual: Boolean? = null
     @Volatile private var greetUntil = 0L
     private var lastSignal: Boolean? = null
+    /** A new reading is trusted only once it has held for [STEADY_MS] (indicators can flicker the ILL line). */
+    private var steady: Boolean? = null
+    private var pending: Boolean? = null
+    private var pendingSince = 0L
 
     init {
         scope.launch {
             while (true) {
                 publish()
-                delay(1_000)
+                delay(500)
             }
         }
     }
@@ -78,7 +82,7 @@ class HeadlightRepository @Inject constructor(
 
     private fun publish() {
         val p = prefs.value
-        val unit = if (p.lightsFromUnit) read(p.lightSignal) else null
+        val unit = debounce(if (p.lightsFromUnit) read(p.lightSignal) else null)
         if (unit != lastSignal) { lastSignal = unit; manual = null }   // the unit changed: follow it again
         val m = manual
         if (android.os.SystemClock.elapsedRealtime() < greetUntil) { _state.value = _state.value.copy(on = true, unit = unit); return }
@@ -88,6 +92,17 @@ class HeadlightRepository @Inject constructor(
             else -> Headlights(false, fromUnit = false, source = "Manual")
         }
     }
+
+    private fun debounce(raw: Boolean?): Boolean? {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (raw == steady) { pending = null; return steady }
+        if (steady == null && pending == null) { steady = raw; return raw }   // first reading
+        if (raw != pending) { pending = raw; pendingSince = now }
+        if (now - pendingSince >= STEADY_MS) { steady = raw; pending = null }
+        return steady
+    }
+
+    private companion object { const val STEADY_MS = 3_000L }
 
     /** Reads the configured signal: "" = system night mode, else "table:key=onValue". */
     private fun read(signal: String): Boolean? {

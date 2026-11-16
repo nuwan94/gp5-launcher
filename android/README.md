@@ -15,19 +15,20 @@ Filament 1.77 (gltfio, filament-utils) for the 3D car. Planned: Room (trips, M5)
 
 ## Modules
 ```
-:app                 HOME activity (MainActivity), Hilt app, LauncherRoot: rail + status bar + screens
-:core:design         tokens (tokens.css), theme, gold trim (gold.css), Rail, StatusBar, GpCard, ModePill, Chip
+:app                 HOME activity (MainActivity), Hilt app, LauncherRoot: top bar + screens + dock
+:core:design         tokens (tokens.css), theme, gold trim (gold.css), TopBar, Dock, CompassDial, WeatherIcon, GpCard, ModePill
 :core:model          VehicleState, DriveMode, MediaState, LauncherSettings
-:core:data           SettingsRepository (DataStore "gp5.settings"), AppsRepository (LauncherApps + "gp5.apps")
+:core:data           SettingsRepository (DataStore "gp5.settings"), AppsRepository, WeatherRepository (Open-Meteo), SunClock
 :obd                 VehicleStateRepository: ELM327 Wi-Fi adapter (TCP, bound to the adapter's Wi-Fi network)
-:media               Now playing from any app's MediaSession (needs notification access)
+:media               Now playing from any app's MediaSession, turn-by-turn from maps notifications, GP5 Link (phone over Bluetooth)
 :car3d               Home car stage: live Filament 3D (OpenGL ES 3) or Blender turntable (OpenGL ES 2)
-:feature:home        Layout B frame with live speed / mode / battery and now playing
+:feature:home        speed, compass, power bar, trip stats, side / chase car, turn or weather card, dock now playing
 :feature:settings    Display > Look: accent, rail side, gold trim, calm motion (live on every screen)
 :feature:vehicle     live gauges, i-DCD power flow, sensor tiles, read / clear trouble codes
 :trips               TripRecorder (1 Hz from OBD), Room database (trips, samples, fill-ups), CSV export
 :feature:trips       Trips / Totals / Fuel log: speed and drive-mode chart, bar charts, add fill-up
 :feature:apps        drawer: installed apps, search, categories, 6 x 3 pages, dock / hide / app info
+:companion           GP5 Link phone app (com.gp5.link): sends the phone's Maps / Waze turns and the weather to the car
 ```
 
 ## Build
@@ -52,12 +53,27 @@ Read: speed and rpm (~5 Hz), coolant, 12 V battery, fuel level, intake and outsi
 Vehicle › Diagnostics reads stored (mode 03) and pending (mode 07) trouble codes; Clear (mode 04) is offered only when stopped.
 Without the car: run a fake adapter on the PC and set the address to `10.0.2.2:35000` in the emulator.
 
+## Layout
+Every screen has the top bar (date, clock, weather, OBD / GPS / phone status, search, theme button: Auto, Day, Night) and the dock (now playing with controls, then Navigation, Music, Phone, Vehicle, Trips, Settings, Apps). Home shows the speed with a compass (direction of travel from GPS), a power bar (rpm with OBD, else speed), the live trip's distance and time, economy and the outside temperature; the car side-on when parked and from behind on the road when driving; and the next turn while navigating, otherwise the weather and the Home / Work routes.
+
+## Weather
+The current weather, today's high, low and rain chance, and the next five hours, from Open-Meteo (free, no key; data CC BY 4.0) for the car's GPS position. It refreshes every 20 minutes. The head unit needs the internet for it (a phone hotspot), or GP5 Link: the phone fetches it over its own data.
+
+## GP5 Link (phone app)
+Install `companion-debug.apk` on the phone, allow notification access and Bluetooth, and pick the car from the paired devices. The phone then connects to the launcher over Bluetooth (RFCOMM, the pairing the car already has) whenever it is in range and sends:
+- the next turn from Google Maps or Waze running on the phone (distance, instruction, arrival, arrow), shown as the turn card on Home;
+- the weather for the car's position when the head unit cannot fetch it.
+
+Without the phone app, a maps app running on the head unit itself fills the turn card the same way. Bluetooth audio (AVRCP) carries no navigation data, so the phone app is needed for the phone's directions.
+
 ## Now playing
 Home shows the track, art, progress and controls of whatever is playing: music apps (Spotify, YouTube Music, radio) and the phone over Bluetooth through the head unit's Bluetooth music app. The launcher reads media sessions (including Bluetooth AVRCP sessions and cover art), the common `metachanged` music broadcasts, and, as a last resort, a Bluetooth app's notification; without a session the buttons send media keys, which reach the phone. Settings › Now playing lists what the launcher can see. Android only shares other apps' media sessions with apps that have notification access: tap **Allow** on the Home music card and switch on *GP5 Launcher now playing*.
 
+**Equalizer:** bars, a wave, mirrored bars or a grid of dots move behind now playing in the dock (Settings › Display › Equalizer, or long press the song to change style). With **Follow the music** on, it reads the sound playing (Android's Visualizer on the output mix; it needs the microphone permission, nothing is recorded). Off, or for apps and Bluetooth audio that hide their sound, it moves to a beat while music plays.
+
 ## 3D car
 Home picks the renderer by GPU (Settings › Car › 3D view: Auto / Live 3D / Turntable):
-- **Live 3D** (OpenGL ES 3): Filament, studio IBL from `studio.hdr`, 30 fps cap, front three-quarter when parked, chase view from behind on a scrolling road when driving, wheels spin with speed, lamps fade on. Falls back to the turntable if it fails or drops under ~14 fps for 3 s.
+- **Live 3D** (OpenGL ES 3): Filament, studio IBL from `studio.hdr`, 30 fps cap, side-on when parked, chase view from behind on a scrolling road when driving, wheels spin with speed, lamps fade on. Falls back to the turntable if it fails or drops under ~14 fps for 3 s.
 - **Turntable** (OpenGL ES 2 units such as Mali-400 / PowerVR SGX): 72 Cycles-rendered angles, lamps off and on, cross-faded, with the same road drawn in the frame's perspective.
 
 The assets are built in Blender 5.2 by local scripts (not in this repo: they need the source model): `build_android.py` makes `fit-gp5.glb` (78 meshes, 100k triangles, metres, front = +Z, nodes `GP5_Wheel_*`, materials `GP5_Head_*` / `GP5_Tail_*`), `render_stage.py` renders `studio.hdr`, the floor shadow and `turntable/`.
@@ -81,11 +97,11 @@ Settings › Navigation: set Home and Work (an address, place name or `lat,lng`)
 When the head unit starts (or wakes after the screen was off for a minute, as most units do on ignition), Home plays a short greeting: the gold Honda logo, "Good morning, <name>" and the date, then the car's lamps flash as Home appears. A cabin announcement plays with it: a ding-dong, then one of seven recorded "welcome aboard" lines (a morning and an afternoon version of each, picked at random, never the same twice in a row) in a clear voice, with the welcome chime quietly underneath (Settings › Display › Announcements: tick which lines are in the pick and play each one); music from the phone dips under them. The voice is Piper `en_GB-cori-high` (public-domain LibriVox data), recorded offline, so it starts with the animation. Set the name (default "User"), switch the voice or music off, turn it off, or play it from Settings › Display › Welcome. It is skipped while driving; a tap skips it; calm motion makes it a plain fade.
 
 ## Day and night
-Settings › Display › Theme: **Auto** (default) is a light theme by day (warm paper-white, darker accents, antique gold, a light studio floor) and the dark theme once the headlights are on; without a light signal it goes by the clock (dark from 6 pm to 6 am). A change from the lights waits 3 s and cross-fades. **Day** and **Night** fix it.
+Settings › Display › Theme (or the top bar button): **Auto** (default) is a light theme by day (warm paper-white, darker accents, antique gold, a light studio floor) and the dark theme at night, by sunrise and sunset at the car's position (dark from 15 min after sunset to 15 min before sunrise). The headlights only light the car's lamps; they no longer change the theme, and a light signal must hold for 3 s, so indicators do not flicker it. **Day** and **Night** fix it.
 
 ## Settings
 Categories on the left (Vehicle & OBD, Display, Units, Navigation, Home & car, Trips & fuel, Data & backup, About), each with a live summary. Units switches economy between km/L and L/100 km everywhere. Data & backup saves the settings, dock and hidden apps as a JSON file (a USB drive works), restores it, or resets the launcher (trips and the fuel log are kept); these are locked while driving.
 
 ## Licences
 The 3D car (`car3d/src/main/assets/car/`) is a modified version of "2016 Honda Fit DBA-GK3" by Ddiaz Design (Sketchfab), CC BY-NC-SA 4.0: credit, non-commercial, share-alike. Details in `car3d/src/main/assets/car/LICENSE.txt`.
-The Honda emblem is a trademark, used for this personal launcher only. Icons: Tabler (MIT).
+The Honda emblem is a trademark, used for this personal launcher only. Icons: Tabler (MIT). Weather data: Open-Meteo, CC BY 4.0.

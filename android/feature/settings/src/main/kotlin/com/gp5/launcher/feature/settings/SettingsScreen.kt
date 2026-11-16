@@ -94,6 +94,8 @@ class SettingsViewModel @Inject constructor(
     fun rail(side: RailSide) = viewModelScope.launch { repo.setRailSide(side) }
     fun gold(on: Boolean) = viewModelScope.launch { repo.setGoldTrim(on) }
     fun calm(on: Boolean) = viewModelScope.launch { repo.setCalmMotion(on) }
+    fun visualizer(v: com.gp5.launcher.core.model.VisualizerStyle) = viewModelScope.launch { repo.setVisualizer(v) }
+    fun visualizerLive(on: Boolean) = viewModelScope.launch { repo.setVisualizerLive(on) }
     fun carRenderer(r: CarRenderer) = viewModelScope.launch { repo.setCarRenderer(r) }
     fun theme(t: com.gp5.launcher.core.model.ThemeMode) = viewModelScope.launch { repo.setTheme(t) }
     val activeRenderer = LiveHealth.active
@@ -267,7 +269,7 @@ fun SettingsScreen(vm: SettingsViewModel = hiltViewModel()) {
 
 private fun summary(p: Page, s: LauncherSettings, car: VehicleState, mediaAccess: Boolean, version: String): Pair<String, Color?> = when (p) {
     Page.Obd -> if (!s.obdEnabled) "Off · speed from GPS" to null else linkTitle(car) to (if (car.connected) Gp5Palette.Ev else null)
-    Page.Display -> "${s.theme.name} theme · ${LauncherSettings.ACCENTS.firstOrNull { it.first == s.accentArgb }?.second ?: "Custom"} · rail ${s.railSide.name.lowercase()}" to null
+    Page.Display -> "${s.theme.name} theme · ${LauncherSettings.ACCENTS.firstOrNull { it.first == s.accentArgb }?.second ?: "Custom"}" to null
     Page.Units -> "km/h · °C · ${s.economyUnit.label}" to null
     Page.Navigation -> (listOfNotNull(s.homePlace.takeIf { it.isNotBlank() }?.let { "Home" }, s.workPlace.takeIf { it.isNotBlank() }?.let { "Work" })
         .joinToString(" + ").ifEmpty { "No places set" } + " · " + when (s.navApp) { NavApp.Auto -> "Auto"; NavApp.GoogleMaps -> "Maps"; NavApp.Waze -> "Waze" }) to null
@@ -359,14 +361,30 @@ private fun DisplayPage(vm: SettingsViewModel, s: LauncherSettings) {
                 }
             }
         }
-        SettingRow("Rail side", "Right puts it next to the driver (RHD)") {
-            Segmented(listOf("Left", "Right"), if (s.railSide == RailSide.Left) 0 else 1) { vm.rail(if (it == 0) RailSide.Left else RailSide.Right) }
-        }
-        SettingRow("Gold trim", "Gold edges on cards and the rail, to match the gold badges") {
+        SettingRow("Gold trim", "Gold edges on cards and the dock, to match the gold badges") {
             Toggle(s.goldTrim) { vm.gold(it) }
         }
         SettingRow("Calm motion", "Stop ambient animation even when parked") {
             Toggle(s.calmMotion) { vm.calm(it) }
+        }
+    }
+    Section("Equalizer", "Moves behind now playing in the dock; long press the song to change the style")
+    Group {
+        SettingRow("Style", "Bars, a wave, bars from the middle, or a grid of dots") {
+            Segmented(com.gp5.launcher.core.model.VisualizerStyle.entries.map { it.label }, s.visualizer.ordinal) {
+                vm.visualizer(com.gp5.launcher.core.model.VisualizerStyle.entries[it])
+            }
+        }
+        val ask = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { granted ->
+            vm.visualizerLive(granted)
+        }
+        val context = androidx.compose.ui.platform.LocalContext.current
+        SettingRow("Follow the music", "Move with the sound itself. Asks for the microphone permission, which Android needs to read the sound playing; nothing is recorded. Off, or for apps that hide their sound, it moves to a beat") {
+            Toggle(s.visualizerLive) { on ->
+                if (!on) vm.visualizerLive(false)
+                else if (context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) vm.visualizerLive(true)
+                else ask.launch(android.Manifest.permission.RECORD_AUDIO)
+            }
         }
     }
     Section("Welcome", "A greeting when the car starts")
@@ -729,7 +747,7 @@ private fun Toggle(on: Boolean, onChange: (Boolean) -> Unit) {
 @Composable
 private fun Segmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
     val look = LocalGp5Look.current
-    val w = if (options.size > 2) 100.dp else 76.dp
+    val w = when { options.size > 3 -> 80.dp; options.size > 2 -> 100.dp; else -> 76.dp }
     val x by animateDpAsState(w * selected, spring(dampingRatio = 0.6f), label = "seg")
     Box(Modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).background(Gp5Palette.Surface1).padding(3.dp)) {
         Box(Modifier.offset(x = x).size(w, 38.dp).clip(RoundedCornerShape(19.dp)).background(look.accentSoft))

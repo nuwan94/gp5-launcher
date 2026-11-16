@@ -43,10 +43,19 @@ import com.gp5.launcher.core.design.Gp5Look
 import com.gp5.launcher.core.design.Gp5Motion
 import com.gp5.launcher.core.design.Gp5Palette
 import com.gp5.launcher.core.design.Gp5Theme
-import com.gp5.launcher.core.design.Rail
-import com.gp5.launcher.core.design.StatusBar
+import com.gp5.launcher.core.design.Dock
+import com.gp5.launcher.core.design.DockItem
+import com.gp5.launcher.core.design.Gp5Type
+import com.gp5.launcher.core.design.TopBar
+import com.gp5.launcher.core.design.WeatherIcon
+import com.gp5.launcher.core.design.R as DesignR
+import com.gp5.launcher.feature.home.NowPlayingBar
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Text
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.gp5.launcher.core.model.LauncherSettings
-import com.gp5.launcher.core.model.RailSide
 import com.gp5.launcher.feature.apps.AppsScreen
 import com.gp5.launcher.feature.home.HomeScreen
 import com.gp5.launcher.feature.settings.SettingsScreen
@@ -65,15 +74,19 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltAndroidApp
 class Gp5App : Application() {
     @Inject lateinit var trips: TripRecorder
+    @Inject lateinit var weather: com.gp5.launcher.core.data.WeatherRepository
+    @Inject lateinit var nav: com.gp5.launcher.media.NavigationRepository   // registers with the listener early
 
     override fun onCreate() {
         super.onCreate()
         trips.start()   // records trips for the whole life of the process, whichever screen is open
+        weather.start()
         com.gp5.launcher.core.data.WelcomeTrigger.install(this)
     }
 }
@@ -88,13 +101,15 @@ class MainActivity : ComponentActivity() {
     private val homePresses = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     @Inject lateinit var gps: GpsSpeed
+    @Inject lateinit var link: com.gp5.launcher.media.PhoneLink
 
-    /** Location powers the GPS speedometer (no OBD needed) and trip place names. Asked once. */
-    private val askLocation = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { gps.start() }
+    /** Location powers the GPS speedometer, compass and weather; Bluetooth the phone link. Asked once. */
+    private val askLocation = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { gps.start(); link.start() }
 
     override fun onResume() {
         super.onResume()
         gps.start()   // picks up a permission granted in system settings
+        link.start()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -110,8 +125,10 @@ class MainActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         setContent { LauncherRoot(homePresses) }
-        if (!gps.allowed() && savedInstanceState == null) {
-            askLocation.launch(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION))
+        if ((!gps.allowed() || !link.allowed()) && savedInstanceState == null) {
+            val ask = mutableListOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION)
+            if (android.os.Build.VERSION.SDK_INT >= 31) ask += android.Manifest.permission.BLUETOOTH_CONNECT
+            askLocation.launch(ask.toTypedArray())
         }
     }
 }
@@ -122,15 +139,33 @@ class LauncherViewModel @Inject constructor(
     vehicle: VehicleStateRepository,
     private val headlights: com.gp5.launcher.core.data.HeadlightRepository,
     private val sound: WelcomeSound,
+    gps: GpsSpeed,
+    weather: com.gp5.launcher.core.data.WeatherRepository,
+    link: com.gp5.launcher.media.PhoneLink,
+    private val store: SettingsRepository,
 ) : ViewModel() {
+    val place = gps.place
+    val weather = weather.weather
+    val phone = link.phone
+    init {
+        viewModelScope.launch { gps.place.collect { p -> if (p != null) weather.update(p.lat, p.lon) } }
+    }
+    /** Theme button: Auto, Day, Night, round again. */
+    fun cycleTheme() {
+        viewModelScope.launch {
+            store.setTheme(when (settings.value.theme) {
+                com.gp5.launcher.core.model.ThemeMode.Auto -> com.gp5.launcher.core.model.ThemeMode.Day
+                com.gp5.launcher.core.model.ThemeMode.Day -> com.gp5.launcher.core.model.ThemeMode.Night
+                com.gp5.launcher.core.model.ThemeMode.Night -> com.gp5.launcher.core.model.ThemeMode.Auto
+            })
+        }
+    }
     val settings = settings.settings.stateIn(viewModelScope, SharingStarted.Eagerly, LauncherSettings())
     /** False until DataStore has been read (so the welcome never shows the default name by mistake). */
     val loaded = settings.settings.map { true }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val vehicle = vehicle.state
     val welcome = com.gp5.launcher.core.data.WelcomeTrigger.pending
     fun welcomeReveal() = headlights.greet()
-    /** The head unit's light signal, for the Auto theme (null when the launcher does not follow one). */
-    val unitLights = headlights.state.map { it.unit }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, null)
     init { sound.warmUp() }
     /** Chime and the recorded "Welcome to Honda Fit", as set in Settings › Display › Welcome. */
     @Suppress("UNUSED_PARAMETER")
@@ -160,23 +195,18 @@ fun LauncherRoot(homePresses: SharedFlow<Unit>, vm: LauncherViewModel = hiltView
     BackHandler(enabled = dest != Destination.Home) { dest = Destination.Home }
     LaunchedEffect(homePresses) { homePresses.collect { dest = Destination.Home } }
 
-    // Day / night theme. Auto follows the headlights (night mode or the learned signal); without
-    // a signal, the clock. A change from the lights waits 3 s so a flicker does not swap the theme.
-    val unitLights by vm.unitLights.collectAsStateWithLifecycle()
-    val hour by androidx.compose.runtime.produceState(java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) {
-        while (true) { kotlinx.coroutines.delay(60_000); value = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY) }
+    // Day / night theme. Auto goes by the sun at the car's position (dark from 15 min after sunset to
+    // 15 min before sunrise; Colombo until the first fix), re-checked every minute.
+    val place by vm.place.collectAsStateWithLifecycle()
+    val minute by androidx.compose.runtime.produceState(System.currentTimeMillis()) {
+        while (true) { kotlinx.coroutines.delay(60_000L - System.currentTimeMillis() % 60_000L); value = System.currentTimeMillis() }
     }
-    val wantNight = when (settings.theme) {
+    val night = when (settings.theme) {
         com.gp5.launcher.core.model.ThemeMode.Day -> false
         com.gp5.launcher.core.model.ThemeMode.Night -> true
-        com.gp5.launcher.core.model.ThemeMode.Auto -> unitLights ?: (hour >= 18 || hour < 6)
-    }
-    var night by remember { mutableStateOf(wantNight) }
-    LaunchedEffect(wantNight, loaded) {
-        if (wantNight != night) {
-            if (loaded && settings.theme == com.gp5.launcher.core.model.ThemeMode.Auto) kotlinx.coroutines.delay(3_000)
-            night = wantNight
-        }
+        com.gp5.launcher.core.model.ThemeMode.Auto -> com.gp5.launcher.core.data.SunClock.isNight(
+            minute, place?.lat ?: com.gp5.launcher.core.data.SunClock.DEFAULT_LAT, place?.lon ?: com.gp5.launcher.core.data.SunClock.DEFAULT_LON,
+        )
     }
     val look = Gp5Look(
         accent = Color(settings.accentArgb),
@@ -186,17 +216,34 @@ fun LauncherRoot(homePresses: SharedFlow<Unit>, vm: LauncherViewModel = hiltView
     )
     Gp5Theme(look, night = night) {
       Box(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxSize().background(Gp5Palette.Bg)) {
-            val rail = @Composable { Rail(selected = dest, onSelect = { dest = it }, side = settings.railSide) }
-            if (settings.railSide == RailSide.Left) rail()
-            Column(Modifier.weight(1f).padding(start = Gp5Dimens.Gutter, end = Gp5Dimens.Gutter, bottom = Gp5Dimens.Gutter)) {
-                StatusBar(
-                    obdConnected = car.connected, outsideTempC = car.ambientC?.let { kotlin.math.round(it).toInt() },
-                    gpsSpeed = car.speedSource == com.gp5.launcher.core.model.SpeedSource.Gps,
-                )
-                Screens(dest) { dest = it }
-            }
-            if (settings.railSide == RailSide.Right) rail()
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val weather by vm.weather.collectAsStateWithLifecycle()
+        val phone by vm.phone.collectAsStateWithLifecycle()
+        Column(Modifier.fillMaxSize().background(Gp5Palette.Bg).padding(start = Gp5Dimens.Gutter, end = Gp5Dimens.Gutter, bottom = Gp5Dimens.Gutter)) {
+            val w = weather
+            TopBar(
+                onHome = { dest = Destination.Home },
+                onSearch = { dest = Destination.Apps },
+                onTheme = { vm.cycleTheme() },
+                weather = if (w == null) null else ({
+                    WeatherIcon(w.code, w.isDay, size = 30.dp)
+                    Text("${kotlin.math.round(w.tempC).toInt()}°", style = Gp5Type.Label.copy(color = Gp5Palette.Text, fontSize = 20.sp), modifier = Modifier.padding(start = 6.dp))
+                }),
+                chips = {
+                    StatusChips(obd = car.connected, gps = car.speedSource == com.gp5.launcher.core.model.SpeedSource.Gps, phone = phone)
+                },
+            )
+            Box(Modifier.weight(1f).fillMaxWidth()) { Screens(dest) { dest = it } }
+            Dock(
+                items = listOf(
+                    DockItem("Home", DesignR.drawable.ic_home, dest == Destination.Home) { dest = Destination.Home },
+                    DockItem("Vehicle", DesignR.drawable.ic_rail_vehicle, dest == Destination.Vehicle) { dest = Destination.Vehicle },
+                    DockItem("Trips", DesignR.drawable.ic_rail_trips, dest == Destination.Trips) { dest = Destination.Trips },
+                    DockItem("Settings", DesignR.drawable.ic_rail_settings, dest == Destination.Settings) { dest = Destination.Settings },
+                    DockItem("Apps", DesignR.drawable.ic_rail_apps, dest == Destination.Apps) { dest = Destination.Apps },
+                ),
+                leading = { NowPlayingBar() },
+            )
         }
         if (welcome != null && loaded && settings.welcome) {
             key(welcome) {
@@ -220,20 +267,32 @@ private fun Screens(dest: Destination, go: (Destination) -> Unit) {
     AnimatedContent(
         targetState = dest,
         transitionSpec = {
-            val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
-            (fadeIn(tween(Gp5Motion.Base, delayMillis = 60)) + slideInVertically(tween(Gp5Motion.Base, easing = Gp5Motion.EaseOut)) { 24 * dir })
-                .togetherWith(fadeOut(tween(120)) + slideOutVertically(tween(120)) { -24 * dir })
+            fadeIn(tween(Gp5Motion.Base, delayMillis = 40, easing = Gp5Motion.EaseOut))
+                .togetherWith(fadeOut(tween(120)))
         },
         label = "destination",
     ) { d ->
         Box(Modifier.fillMaxSize()) {
             when (d) {
-                Destination.Home -> HomeScreen(onOpenApps = { go(Destination.Apps) }, onOpenSettings = { go(Destination.Settings) })
+                Destination.Home -> HomeScreen()
                 Destination.Vehicle -> VehicleScreen(onOpenObdSettings = { go(Destination.Settings) })
                 Destination.Trips -> TripsScreen()
                 Destination.Apps -> AppsScreen(onHome = { go(Destination.Home) })
                 Destination.Settings -> SettingsScreen()
             }
         }
+    }
+}
+
+@Composable
+private fun StatusChips(obd: Boolean, gps: Boolean, phone: String?) {
+    val accent = com.gp5.launcher.core.design.LocalGp5Look.current.accent
+    Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Text("OBD", style = Gp5Type.Caption.copy(fontSize = 14.sp, color = if (obd) accent else Gp5Palette.Text3))
+        if (gps) Text("GPS", style = Gp5Type.Caption.copy(fontSize = 14.sp, color = accent))
+        if (phone != null) androidx.compose.material3.Icon(
+            androidx.compose.ui.res.painterResource(DesignR.drawable.ic_bluetooth), "Phone link: $phone",
+            tint = accent, modifier = Modifier.size(18.dp),
+        )
     }
 }

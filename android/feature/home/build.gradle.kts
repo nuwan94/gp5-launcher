@@ -36,6 +36,7 @@ dependencies {
     implementation(project(":media"))
     implementation(project(":core:data"))
     implementation(project(":car3d"))
+    implementation(project(":trips"))
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 }
